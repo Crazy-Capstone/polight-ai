@@ -1,0 +1,42 @@
+{
+  "medical_expense": {
+    "display_name": "의료비",
+    "description": "여행 중 상해 또는 질병으로 발생한 의료비 보장",
+    "ui_priority": 1
+  },
+  "flight_delay": {
+    "display_name": "항공 지연",
+    "description": "항공기 지연, 결항, 수하물 지연 등으로 발생한 비용 보장",
+    "ui_priority": 2
+  },
+  "baggage": {
+    "display_name": "수하물/휴대품",
+    "description": "여행 중 휴대품의 도난, 파손 또는 수하물 관련 손해 보장",
+    "ui_priority": 3
+  },
+  "emergency_transport": {
+    "display_name": "긴급 이송",
+    "description": "구조, 후송, 송환 등 긴급 이동 비용 보장",
+    "ui_priority": 4
+  },
+  "dental_emergency": {
+    "display_name": "치과 응급",
+    "description": "여행 중 발생한 치과 응급 치료비 보장",
+    "ui_priority": 5
+  },
+  "liability": {
+    "display_name": "배상 책임",
+    "description": "타인에게 신체 또는 재산상 손해를 입힌 경우의 법률상 배상책임 보장",
+    "ui_priority": 6
+  },
+  "trip_cancellation": {
+    "display_name": "여행 취소/중단",
+    "description": "예정된 여행의 취소 또는 중단으로 인한 비용 보장",
+    "ui_priority": 7
+  },
+  "death_disability": {
+    "display_name": "사망/후유장해",
+    "description": "여행 중 상해 또는 질병으로 인한 사망·후유장해 보장",
+    "ui_priority": 8
+  }
+}

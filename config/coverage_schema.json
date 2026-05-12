@@ -1,0 +1,47 @@
+{
+  "document_info": {
+    "insurer": "",
+    "product_name": "",
+    "document_type": "policy_pdf",
+    "version_date": "",
+    "source_file_name": ""
+  },
+  "trip_info": {
+    "destination_country": "",
+    "destination_city": "",
+    "start_date": "",
+    "end_date": "",
+    "insurance_status": ""
+  },
+  "coverages": [
+    {
+      "category_id": "",
+      "display_name": "",
+      "raw_titles": [],
+      "summary": "",
+      "status": "active",
+      "coverage_limit": {
+        "amount": null,
+        "currency": "KRW",
+        "display": "",
+        "sub_limits": []
+      },
+      "conditions": [],
+      "covered_items": [],
+      "excluded_items": [],
+      "claim_documents": [],
+      "source_references": [
+        {
+          "page": null,
+          "section_title": "",
+          "raw_text": ""
+        }
+      ],
+      "confidence": {
+        "category_mapping": 0.0,
+        "limit_extraction": 0.0,
+        "exclusion_extraction": 0.0
+      }
+    }
+  ]
+}
