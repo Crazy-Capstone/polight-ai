@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Raw and generated data
+data/raw_pdfs/*
+data/extracted_text/*
+data/chunks/*
+data/parsed_results/*
+
+# Keep folder structure
+!data/raw_pdfs/.gitkeep
+!data/extracted_text/.gitkeep
+!data/chunks/.gitkeep
+!data/parsed_results/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
