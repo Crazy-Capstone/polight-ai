@@ -23,6 +23,11 @@ FOOTER_Y_RATIO = 0.92
 # 너무 짧은 블록(노이즈) 최소 글자 수
 MIN_BLOCK_CHARS = 2
 
+# N블록(컬럼) 테이블 행에서 컬럼 사이를 구분하는 구분자.
+# 셀 내부 줄바꿈(같은 컬럼 안에서 여러 줄로 감싸진 경우)과 컬럼 경계를 구분할 수 있도록,
+# 줄바꿈이 아닌 별도 구분자를 사용한다.
+COLUMN_SEPARATOR = " | "
+
 
 def collect_repeated_texts(doc: fitz.Document) -> set[str]:
     """
@@ -97,8 +102,12 @@ def format_row(row: list, page_width: float) -> str:
     한 행(row)의 블록들을 텍스트로 변환한다.
 
     - 블록이 1개: 그냥 텍스트 반환
-    - 블록이 2개이고 좌측 레이블 + 우측 내용 패턴이면 "레이블: 내용" 형식으로 합침
-    - 그 외 다중 블록: x 순서로 공백 연결
+    - 블록이 2개이고 좌측 레이블 + 우측 내용 패턴이면 "레이블\n내용" 형식으로 합침
+      (문서 본문의 "제목 / 본문" 구조를 보존하기 위한 기존 동작, 표가 아닌 일반 조항에도 쓰임)
+    - 그 외 2개 이상의 블록(N컬럼 표 행): 각 블록을 한 줄로 합친 뒤 COLUMN_SEPARATOR로 연결.
+      셀 내부의 줄바꿈(같은 컬럼이 여러 줄로 감싸진 경우)과 컬럼 경계를 구분하기 위해
+      컬럼 사이는 개행이 아닌 별도 구분자를 사용한다 - 이렇게 하면 한 표 행이 한 줄로 나오고,
+      COLUMN_SEPARATOR로 split하면 컬럼별 값을 그대로 복원할 수 있다.
     """
     if len(row) == 1:
         return row[0][4].strip()
@@ -106,7 +115,7 @@ def format_row(row: list, page_width: float) -> str:
     label_threshold = page_width * TABLE_LEFT_CELL_MAX_RATIO
     sorted_row = sorted(row, key=lambda b: b[0])
 
-    # 좌측 레이블 + 우측 내용 패턴 감지
+    # 좌측 레이블 + 우측 내용 패턴 감지 (2블록 전용)
     if len(sorted_row) == 2:
         left, right = sorted_row
         left_x1 = left[2]
@@ -120,8 +129,15 @@ def format_row(row: list, page_width: float) -> str:
                 clean_right = right_text
                 return f"{clean_label}\n{clean_right}"
 
-    # 일반 다중 블록: x 순서로 연결
-    return "\n".join(b[4].strip() for b in sorted_row if b[4].strip())
+    # N블록(컬럼) 표 행: 블록마다 내부 줄바꿈을 한 줄로 합치고, 컬럼 구분자로 연결
+    columns = []
+    for b in sorted_row:
+        raw = b[4].strip()
+        if not raw:
+            continue
+        columns.append(" ".join(raw.split()))
+
+    return COLUMN_SEPARATOR.join(columns)
 
 
 def extract_page_text(
