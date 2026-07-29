@@ -4,6 +4,8 @@ from pathlib import Path
 
 import httpx
 
+from app.clients import spring_client
+from app.clients.spring_client import SpringCallbackError
 from app.schemas.analysis import AnalysisCompleteCallback, AnalysisFailCallback, CoverageItemPayload
 from app.schemas.analysis import AnalysisStartRequest
 from app.services.chunking_service import chunk_pages
@@ -44,9 +46,9 @@ def _save_results(analysis_result_id: str, chunks: list[dict], embeddings: dict[
         json.dump(embeddings, f, ensure_ascii=False)
 
 
-# TODO(6단계): app/clients/spring_client.py로 교체해 실제 Spring 콜백 API를 호출.
-# 지금은 계약(AnalysisCompleteCallback/Fail)만 만들어서 로그로 확인.
-def _notify_complete(analysis_result_id: str, chunks: list[dict]) -> None:
+# 콜백 전송 자체의 실패(Spring 다운 등)는 파이프라인 성공/실패와 별개 문제이므로
+# 여기서 삼키고 로그만 남긴다. process_analysis의 예외 처리로 되돌리지 않는다.
+def _safe_notify_complete(analysis_result_id: str, chunks: list[dict]) -> None:
     payload = AnalysisCompleteCallback(
         analysisResultId=analysis_result_id,
         summary=f"chunk {len(chunks)}개 생성 완료",
@@ -60,16 +62,21 @@ def _notify_complete(analysis_result_id: str, chunks: list[dict]) -> None:
             if chunk.get("matched_category")
         ],
     )
-    logger.info("analysis complete (stub callback): %s", payload.model_dump(by_alias=True))
+    try:
+        spring_client.notify_complete(payload)
+    except SpringCallbackError:
+        logger.error("완료 콜백 전달 실패 (분석 자체는 성공): %s", analysis_result_id)
 
 
-def _notify_fail(analysis_result_id: str, error_message: str) -> None:
+def _safe_notify_fail(analysis_result_id: str, error_message: str) -> None:
     payload = AnalysisFailCallback(analysisResultId=analysis_result_id, errorMessage=error_message)
-    logger.error("analysis failed (stub callback): %s", payload.model_dump(by_alias=True))
+    try:
+        spring_client.notify_fail(payload)
+    except SpringCallbackError:
+        logger.error("실패 콜백 전달도 실패: %s", analysis_result_id)
 
 
-# BackgroundTasks로 호출되는 진입점. 여기서 예외를 삼켜서 fail 콜백으로 전환한다
-# (그렇지 않으면 백그라운드 태스크 예외가 조용히 로그에만 남고 Spring은 영영 응답을 못 받음).
+# BackgroundTasks로 호출되는 진입점.
 def process_analysis(request: AnalysisStartRequest) -> None:
     try:
         pdf_path = _download_pdf(request.download_url, request.document_id)
@@ -77,7 +84,9 @@ def process_analysis(request: AnalysisStartRequest) -> None:
         chunks = chunk_pages(pages, source_file=pdf_path.name)
         embeddings = embed_chunks(chunks)
         _save_results(request.analysis_result_id, chunks, embeddings)
-        _notify_complete(request.analysis_result_id, chunks)
     except Exception as e:
         logger.exception("analysis pipeline failed: %s", request.analysis_result_id)
-        _notify_fail(request.analysis_result_id, str(e))
+        _safe_notify_fail(request.analysis_result_id, str(e))
+        return
+
+    _safe_notify_complete(request.analysis_result_id, chunks)
