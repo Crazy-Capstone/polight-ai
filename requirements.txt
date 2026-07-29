@@ -2,6 +2,7 @@
 fastapi
 uvicorn[standard]
 pydantic-settings
+httpx
 
 # PDF 처리
 pymupdf
