@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # Spring 콜백 대상 (완료/실패 알림). 아직 미확정이면 비워둔 채로 로컬 테스트.
     spring_base_url: str | None = None
 
+    log_level: str = "INFO"
+
 
 @lru_cache
 def get_settings() -> Settings:
