@@ -17,14 +17,25 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "embeddings"
 # 한 번에 API에 보낼 chunk 수 (OpenAI 배치 상한: 2048)
 BATCH_SIZE = 50
 
-# 임베딩할 텍스트: 제목 + 본문 합쳐서 의미 강화
-# 제목이 본문에 이미 포함돼 있으면 중복 방지를 위해 본문만 사용
+# 임베딩할 텍스트: 상위 특약명 + 조항 제목 + 본문
+#
+# clause_path(상위 특약명)를 앞에 붙이는 이유: 조항 제목은 "제1조(보험금의 지급사유)"처럼
+# 특약마다 똑같이 반복돼 변별력이 없다. 상위 특약명이 없으면 "항공기 지연" 질의가
+# 수십 개의 동명 조항과 구분되지 않아 검색에서 밀린다.
+# 제목이 본문에 이미 포함돼 있으면 중복 방지를 위해 본문만 사용한다.
 def build_embed_text(chunk: dict) -> str:
+    clause_path = chunk.get("clause_path") or ""
     title = chunk.get("section_title") or ""
     text = chunk.get("text") or ""
+
+    parts = []
+    if clause_path and clause_path not in text:
+        parts.append(clause_path)
     if title and title not in text:
-        return f"{title}\n{text}"
-    return text
+        parts.append(title)
+    parts.append(text)
+
+    return "\n".join(parts)
 
 
 # 텍스트 배치 하나를 API로 임베딩. index 기준 정렬로 입력 순서와 출력 순서를 맞춤
