@@ -7,6 +7,7 @@ from app.repositories.base import ChunkHit, VectorRepository
 from app.schemas.rag import RagQueryRequest, RagQueryResponse, SourceChunk
 from app.services.embedding_service import embed_query
 from app.services.prompt_builder import SYSTEM_PROMPT, build_user_message
+from app.services.reranker import mmr_select
 
 logger = logging.getLogger(__name__)
 
@@ -96,15 +97,19 @@ def answer_question(
     settings = get_settings()
 
     query_vector = embed_query(request.question, client=client)
-    hits = repository.search(
+
+    # 후보를 top_k보다 넓게 뽑은 뒤 MMR로 줄인다.
+    # 좁게 뽑으면 반복되는 표준 조항이 자리를 다 차지해 정답이 밀려난다.
+    candidates = repository.search(
         query_vector,
         policy_id=request.policy_id,
-        top_k=settings.top_k,
+        top_k=settings.top_k * settings.mmr_candidate_multiplier,
     )
 
-    if not hits:
+    if not candidates:
         return RagQueryResponse(answer=NO_EVIDENCE_ANSWER, sources=[])
 
+    hits = mmr_select(candidates, top_k=settings.top_k, lambda_=settings.mmr_lambda)
     hits = attach_related_chunks(hits, repository)
     user_message = build_user_message(
         request.question,

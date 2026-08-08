@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # 검색 시 가져올 청크 수. related_chunk_id로 딸려오는 면책 조항은 이 수에 포함되지 않는다.
     top_k: int = 8
 
+    # MMR 재순위 설정.
+    # 약관은 같은 표준 조항이 특약마다 반복돼, 유사도 정렬만으로는 top_k가 중복본으로 채워진다.
+    # 후보를 top_k의 배수만큼 넉넉히 뽑은 뒤 다양성을 고려해 top_k로 줄인다.
+    mmr_candidate_multiplier: int = 4
+    mmr_lambda: float = 0.6
+
     # DB 스키마 확정 전까지는 비워둠. 내일 연결 시 값 채우면 repository 구현체가 사용.
     database_url: str | None = None
 
