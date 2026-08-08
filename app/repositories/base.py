@@ -36,6 +36,11 @@ class ChunkHit:
     related_chunk_id: str | None
     score: float
 
+    # MMR 재순위에 필요한 정규화된 임베딩. 청크 간 유사도를 계산해야 하므로
+    # 점수(질문과의 유사도)만으로는 부족하다. 저장소가 채워주며, 재순위를 쓰지 않는
+    # 경로(get_by_ids 등)에서는 None으로 둔다.
+    embedding: list[float] | None = None
+
 
 # DB 경계선. 파이프라인에서 저장소를 만지는 단계는 save(색인)와 search/get_by_ids(질의)뿐이고,
 # 전부 이 인터페이스 안에 격리된다. 구현체를 갈아끼워도 호출하는 쪽 코드는 바뀌지 않는다.

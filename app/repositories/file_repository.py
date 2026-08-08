@@ -94,7 +94,7 @@ class FileVectorRepository:
         order = order[np.argsort(-scores[order])]
 
         return [
-            self._to_hit(self._chunks[i], float(scores[i]))
+            self._to_hit(self._chunks[i], float(scores[i]), self._matrix[i].tolist())
             for i in order
             if np.isfinite(scores[i])
         ]
@@ -165,7 +165,7 @@ class FileVectorRepository:
         }
 
     @staticmethod
-    def _to_hit(chunk: dict, score: float) -> ChunkHit:
+    def _to_hit(chunk: dict, score: float, embedding: list[float] | None = None) -> ChunkHit:
         return ChunkHit(
             chunk_id=chunk["chunk_id"],
             document_id=chunk.get("document_id") or Path(chunk["source_file"]).stem,
@@ -177,4 +177,5 @@ class FileVectorRepository:
             matched_category=chunk.get("matched_category"),
             related_chunk_id=chunk.get("related_chunk_id"),
             score=score,
+            embedding=embedding,
         )
