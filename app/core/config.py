@@ -12,12 +12,19 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
 
+    # 임베딩 벤더. app/services/embedding_providers.py의 PROVIDERS 키.
+    # 비교 실험 결과 upstage-1536 채택 (MRR 0.7875 vs openai-small 0.5147).
+    embedding_provider: str = "upstage-1536"
+
     # 답변 생성용 채팅 모델. 임베딩 모델과 별개로 관리한다.
     llm_model: str = "gpt-4o-mini"
 
     # Upstage 문서 파싱. heading 계층과 요소 타입을 제공해
     # policy_chunks의 clause_path와 source_content_type(NOT NULL)을 채운다.
     upstage_api_key: str = ""
+
+    # 임베딩 모델 비교용. 없으면 해당 벤더는 비교에서 자동으로 빠진다.
+    qwen_api_key: str = ""
 
     # 검색 시 가져올 청크 수. related_chunk_id로 딸려오는 면책 조항은 이 수에 포함되지 않는다.
     top_k: int = 8
