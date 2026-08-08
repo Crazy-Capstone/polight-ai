@@ -110,7 +110,7 @@
   },
   {
     "id": "Q10",
-    "type": "procedure",
+    "type": "coverage",
     "question": "해외에서 음식을 잘못 먹어 식중독에 걸리면 보상되나요?",
     "gold": [
       { "contains": "음식물의 섭취로 인해 중독" }
@@ -118,6 +118,30 @@
     "expected_points": [
       "식중독 특별약관에서 보험금 지급",
       "해외여행 도중 음식물 섭취로 인한 중독"
+    ]
+  },
+  {
+    "id": "Q11",
+    "type": "procedure",
+    "question": "보험금은 청구하고 나서 며칠 안에 받을 수 있나요?",
+    "gold": [
+      { "contains": "접수증을 드리고" },
+      { "contains": "서류를 접수한 때에는" }
+    ],
+    "expected_points": [
+      "서류 접수일부터 3영업일 이내 지급",
+      "조사·확인이 필요하면 기간이 초과될 수 있음"
+    ]
+  },
+  {
+    "id": "Q12",
+    "type": "procedure",
+    "question": "사고가 나면 보험사에 언제 알려야 하나요?",
+    "gold": [
+      { "contains": "지체 없이 그 사실을 회사에 알려야" }
+    ],
+    "expected_points": [
+      "지체 없이 회사에 알려야 함"
     ]
   }
 ]
