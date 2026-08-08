@@ -61,6 +61,18 @@ class VectorRepository(Protocol):
         """질문 벡터와 가장 가까운 청크를 반환한다. policy_id가 주어지면 해당 계약으로 제한한다."""
         ...
 
+    def search_text(
+        self,
+        query: str,
+        policy_id: str | None = None,
+        top_k: int = 8,
+    ) -> list[ChunkHit]:
+        """키워드 기반 검색. 임베딩이 놓치는 고유 표현("구조송환비용" 등)을 잡는다.
+
+        pgvector 구현체에서는 PostgreSQL 전문검색(tsvector)으로 대체된다.
+        """
+        ...
+
     def get_by_ids(self, chunk_ids: list[str]) -> list[ChunkHit]:
         """chunk_id로 직접 조회한다. 보상 조항에 딸린 면책 조항(related_chunk_id)을 끌어올 때 쓴다."""
         ...

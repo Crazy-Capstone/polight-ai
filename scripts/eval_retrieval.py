@@ -35,6 +35,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.repositories.base import ChunkHit  # noqa: E402
 from app.repositories.file_repository import FileVectorRepository  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
+from app.services.rag_service import hybrid_search  # noqa: E402
 from app.services.reranker import mmr_select  # noqa: E402
 
 DEFAULT_QUESTIONS = PROJECT_ROOT / "data" / "eval" / "questions.json"
@@ -111,6 +112,7 @@ def evaluate(
     policy_id: str,
     top_k: int,
     use_mmr: bool,
+    use_hybrid: bool,
     multiplier: int,
     lambda_: float,
 ) -> None:
@@ -121,12 +123,16 @@ def evaluate(
 
     for item in questions:
         vector = embed_query(item["question"])
+        pool = top_k * multiplier if use_mmr else top_k
 
-        if use_mmr:
-            candidates = repository.search(vector, policy_id=policy_id, top_k=top_k * multiplier)
-            hits = mmr_select(candidates, top_k=top_k, lambda_=lambda_)
+        # 임베딩 모델을 비교할 때는 --no-hybrid로 BM25를 꺼야 한다.
+        # 켜두면 키워드 점수가 섞여 모델 간 차이가 희석된다.
+        if use_hybrid:
+            candidates = hybrid_search(repository, item["question"], vector, policy_id, pool)
         else:
-            hits = repository.search(vector, policy_id=policy_id, top_k=top_k)
+            candidates = repository.search(vector, policy_id=policy_id, top_k=pool)
+
+        hits = mmr_select(candidates, top_k=top_k, lambda_=lambda_) if use_mmr else candidates
 
         rank = first_hit_rank(hits, item["gold"])
         ranks.append(rank)
@@ -136,7 +142,8 @@ def evaluate(
 
     print("-" * 78)
     total = len(ranks)
-    print(f"\n질문 {total}개 / MMR {'적용' if use_mmr else '미적용'} / top_k={top_k}")
+    mode = f"MMR {'O' if use_mmr else 'X'} / hybrid {'O' if use_hybrid else 'X'}"
+    print(f"\n질문 {total}개 / {mode} / top_k={top_k}")
 
     for k in RECALL_AT:
         if k > top_k:
@@ -168,6 +175,11 @@ def main() -> None:
     parser.add_argument("--policy-id", type=str, default="db_travel")
     parser.add_argument("--top-k", type=int, default=settings.top_k)
     parser.add_argument("--no-mmr", action="store_true", help="MMR 없이 순수 유사도 정렬로 평가")
+    parser.add_argument(
+        "--no-hybrid",
+        action="store_true",
+        help="BM25를 끄고 벡터 검색만 사용. 임베딩 모델 비교 시 변수를 분리하려면 켜야 한다",
+    )
     parser.add_argument("--find", type=str, default=None, help="라벨링 도우미: 키워드로 청크 검색")
 
     args = parser.parse_args()
@@ -197,6 +209,7 @@ def main() -> None:
         policy_id=args.policy_id,
         top_k=args.top_k,
         use_mmr=not args.no_mmr,
+        use_hybrid=not args.no_hybrid,
         multiplier=settings.mmr_candidate_multiplier,
         lambda_=settings.mmr_lambda,
     )

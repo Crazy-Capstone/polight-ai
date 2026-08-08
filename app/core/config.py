@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # 답변 생성용 채팅 모델. 임베딩 모델과 별개로 관리한다.
     llm_model: str = "gpt-4o-mini"
 
+    # Upstage 문서 파싱. heading 계층과 요소 타입을 제공해
+    # policy_chunks의 clause_path와 source_content_type(NOT NULL)을 채운다.
+    upstage_api_key: str = ""
+
     # 검색 시 가져올 청크 수. related_chunk_id로 딸려오는 면책 조항은 이 수에 포함되지 않는다.
     top_k: int = 8
 
