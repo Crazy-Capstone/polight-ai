@@ -6,6 +6,7 @@ from pathlib import Path
 from openai import OpenAI
 
 from app.core.config import get_settings
+from app.services.answer_providers import generate_json
 from app.schemas.coverage import CoverageItem
 
 logger = logging.getLogger(__name__)
@@ -141,15 +142,12 @@ def extract_coverage_item(
     chunks: list[dict],
     client: OpenAI | None = None,
     model: str | None = None,
+    provider: str | None = None,
 ) -> tuple[CoverageItem | None, list[str]]:
     if not chunks:
         return None, [f"{category}: 해당 조각이 없습니다"]
 
     settings = get_settings()
-    if client is None:
-        if not settings.openai_api_key:
-            raise ValueError(".env에 OPENAI_API_KEY가 설정되지 않았습니다.")
-        client = OpenAI(api_key=settings.openai_api_key)
 
     user_message = (
         f"[담보 카테고리]\n{category} ({display_name})\n\n"
@@ -157,17 +155,22 @@ def extract_coverage_item(
         f"[출력 형식]\n{OUTPUT_SCHEMA}"
     )
 
-    response = client.chat.completions.create(
-        model=model or settings.extraction_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0,
-    )
+    # client를 직접 넘기면 옛 경로(OpenAI 고정)를 쓰고, 없으면 벤더 레지스트리를 탄다.
+    # 테스트가 호출을 가로챌 수 있도록 남겨둔 통로다.
+    if client is not None:
+        response = client.chat.completions.create(
+            model=model or settings.extraction_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        raw = response.choices[0].message.content or "{}"
+    else:
+        raw, _ = generate_json(SYSTEM_PROMPT, user_message, provider_name=provider)
 
-    raw = response.choices[0].message.content or "{}"
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
@@ -196,6 +199,7 @@ def extract_all(
     chunks: list[dict],
     client: OpenAI | None = None,
     model: str | None = None,
+    provider: str | None = None,
 ) -> tuple[list[CoverageItem], list[str]]:
     categories = load_categories()
     items: list[CoverageItem] = []
@@ -210,7 +214,8 @@ def extract_all(
 
         try:
             item, item_warnings = extract_coverage_item(
-                category, meta["display_name"], matched, client=client, model=model
+                category, meta["display_name"], matched,
+                client=client, model=model, provider=provider
             )
         except Exception as e:
             warnings.append(f"{category}: 추출 실패 ({e})")
