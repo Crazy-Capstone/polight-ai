@@ -5,6 +5,7 @@ from openai import OpenAI
 from app.core.config import get_settings
 from app.repositories.base import ChunkHit, VectorRepository
 from app.schemas.rag import RagQueryRequest, RagQueryResponse, SourceChunk
+from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
 from app.services.embedding_service import embed_query
 from app.services.prompt_builder import SYSTEM_PROMPT, build_user_message
@@ -112,16 +113,18 @@ def build_sources(hits: list[ChunkHit]) -> list[SourceChunk]:
     return sources
 
 
+# 답변 생성은 벤더 레지스트리를 거친다. .env의 answer_provider 한 줄로
+# OpenAI / Claude / Gemini를 바꿔 끼울 수 있어야 비교 실험이 가능하다.
+#
+# client 인자는 테스트가 OpenAI 호출을 가로채는 용도로 남아 있다.
+# 넘어오면 기존 경로를 그대로 쓰고, 없으면 레지스트리로 간다.
 def _call_llm(user_message: str, client: OpenAI | None = None, model: str | None = None) -> str:
-    settings = get_settings()
-
     if client is None:
-        if not settings.openai_api_key:
-            raise ValueError(".env에 OPENAI_API_KEY가 설정되지 않았습니다.")
-        client = OpenAI(api_key=settings.openai_api_key)
+        answer, _ = generate(SYSTEM_PROMPT, user_message)
+        return answer
 
     response = client.chat.completions.create(
-        model=model or settings.llm_model,
+        model=model or get_settings().llm_model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},

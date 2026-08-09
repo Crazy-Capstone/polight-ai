@@ -19,11 +19,19 @@ class Settings(BaseSettings):
     # 챗봇 답변 생성용 모델. 실시간 응답이라 지연시간(TTFT 3~5초 목표)이 중요하다.
     llm_model: str = "gpt-4o-mini"
 
+    # 답변 생성 벤더. app/services/answer_providers.py의 PROVIDERS 키.
+    # 비교 실험 전이라 기존 동작(gpt-4o-mini)을 기본값으로 둔다.
+    answer_provider: str = "openai-mini"
+
     # 보장항목 추출용 모델. 답변용과 요구사항이 달라 따로 둔다.
     #   답변: 실시간, 지연시간 중요, 오류는 일회성
     #   추출: 비동기 배치, 지연 덜 중요, 오류가 DB에 저장돼 계속 노출됨
     # 그래서 추출 쪽은 느려도 정확한 모델을 쓰는 선택이 가능해야 한다.
     extraction_model: str = "gpt-4o-mini"
+
+    # Claude / Gemini 비교 실험용. 없으면 해당 벤더만 건너뛴다.
+    anthropic_api_key: str = ""
+    google_api_key: str = ""
 
     # Upstage 문서 파싱. heading 계층과 요소 타입을 제공해
     # policy_chunks의 clause_path와 source_content_type(NOT NULL)을 채운다.
