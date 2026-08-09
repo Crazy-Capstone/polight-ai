@@ -1,0 +1,42 @@
+[
+  {
+    "provider": "openai-mini",
+    "ttft_sec": 1.75,
+    "total_sec": 3.22,
+    "tokens_per_sec": 105.1,
+    "chars": 256,
+    "in_tokens": 5306,
+    "out_tokens": 154,
+    "usd_per_1000_questions": 0.89
+  },
+  {
+    "provider": "openai-41mini",
+    "ttft_sec": 1.26,
+    "total_sec": 5.78,
+    "tokens_per_sec": 78.9,
+    "chars": 579,
+    "in_tokens": 5306,
+    "out_tokens": 357,
+    "usd_per_1000_questions": 2.69
+  },
+  {
+    "provider": "claude-sonnet",
+    "ttft_sec": 6.13,
+    "total_sec": 15.37,
+    "tokens_per_sec": 78.8,
+    "chars": 748,
+    "in_tokens": 8270,
+    "out_tokens": 728,
+    "usd_per_1000_questions": 35.73
+  },
+  {
+    "provider": "claude-opus",
+    "ttft_sec": 2.73,
+    "total_sec": 15.56,
+    "tokens_per_sec": 75.5,
+    "chars": 979,
+    "in_tokens": 8270,
+    "out_tokens": 968,
+    "usd_per_1000_questions": 65.56
+  }
+]
