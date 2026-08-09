@@ -169,7 +169,12 @@ def extract_coverage_item(
         )
         raw = response.choices[0].message.content or "{}"
     else:
-        raw, _ = generate_json(SYSTEM_PROMPT, user_message, provider_name=provider)
+        # provider를 안 넘기면 추출 전용 기본값을 쓴다. generate_json의 기본값은
+        # answer_provider(답변용)라, 그대로 두면 추출이 답변 모델로 돌아간다.
+        raw, _ = generate_json(
+            SYSTEM_PROMPT, user_message,
+            provider_name=provider or settings.extraction_provider,
+        )
 
     try:
         payload = json.loads(raw)
