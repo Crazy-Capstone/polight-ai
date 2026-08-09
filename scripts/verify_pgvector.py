@@ -25,6 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import get_settings  # noqa: E402
 from app.repositories.base import ChunkScope  # noqa: E402
+from app.repositories.file_repository import FileVectorRepository  # noqa: E402
 from app.repositories.pg_repository import PgVectorRepository  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
 
@@ -139,15 +140,53 @@ def main() -> None:
         print(f"    {i}. {hit.score:.2f} {hit.section_title[:50]}")
 
     print("\n[5] 면책 페어링 SQL 재계산")
-    paired = 0
-    for hit in repo.search(vector, policy_id=scope.policy_id, top_k=20):
-        if repo.find_related_exclusion(hit, analysis_result_id):
-            paired += 1
-    print(f"  상위 20건 중 면책 짝을 찾은 조항: {paired}건")
+    # 검색 상위권이 우연히 전부 excluded면 짝이 0건으로 나와 검증이 되지 않는다.
+    # 파일 저장소가 related_chunk_id로 찾아낸 짝 수와 직접 대조한다.
+    file_pairs = sum(1 for c in chunks if c.get("related_chunk_id")) // 2
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM policy_chunks a JOIN policy_chunks b"
+            "  ON b.analysis_result_id = a.analysis_result_id"
+            " AND b.chunk_index = a.chunk_index + 1"
+            " WHERE a.analysis_result_id = %s AND a.clause_type = 'included'"
+            "   AND b.clause_type = 'excluded'"
+            "   AND a.coverage_category = b.coverage_category",
+            (analysis_result_id,),
+        )
+        sql_pairs = cur.fetchone()[0]
+    match = "일치" if sql_pairs == file_pairs else "불일치"
+    print(f"  파일 저장소 {file_pairs}쌍 / SQL 재계산 {sql_pairs}쌍 -> {match}")
+
+    included = [h for h in repo.search(vector, policy_id=scope.policy_id, top_k=40)
+                if h.coverage_type == "included"]
+    found = next((repo.find_related_exclusion(h, analysis_result_id) for h in included
+                  if repo.find_related_exclusion(h, analysis_result_id)), None)
+    if found:
+        print(f"  실제 조회 예: {found.section_title[:52]}")
 
     print("\n[6] 스코프 필터")
     others = repo.search(vector, policy_id=str(uuid4()), top_k=5)
     print(f"  다른 policy_id로 검색 -> {len(others)}건 (0이어야 정상)")
+
+    # 저장소를 갈아끼워도 검색 결과가 같아야 인터페이스 교체가 의미를 갖는다.
+    # 파일 저장소는 numpy 내적, pgvector는 <=> 연산자로 계산하므로
+    # 구현이 다른데도 같은 순위가 나오는지 확인한다.
+    print("\n[7] 파일 저장소와 결과 대조")
+    file_repo = FileVectorRepository()
+    questions = [
+        "임신이나 출산으로 인한 치료비도 보상되나요?",
+        "항공편이 5시간 이상 지연되면 보상되나요?",
+        "보험금을 청구하려면 어떤 서류가 필요한가요?",
+    ]
+    for text in questions:
+        vec = embed_query(text)
+        pg_hits = repo.search(vec, policy_id=scope.policy_id, top_k=5)
+        file_hits = file_repo.search(vec, policy_id="db_travel", top_k=5)
+        # chunk_id 체계가 달라(UUID 대 문자열) 본문 앞부분으로 비교한다
+        pg_keys = [h.text[:60] for h in pg_hits]
+        file_keys = [h.text[:60] for h in file_hits]
+        same = sum(1 for a, b in zip(pg_keys, file_keys) if a == b)
+        print(f"  {text[:34]:36} 상위 5건 중 {same}건 순서까지 동일")
 
     print("\n검증 완료")
 

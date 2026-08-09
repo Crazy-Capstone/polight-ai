@@ -16,8 +16,10 @@ services:
       POSTGRES_DB: polight
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      # 한국어 정렬/비교가 운영과 어긋나지 않도록 명시한다
-      LANG: ko_KR.utf8
+      # 이미지에 ko_KR 로케일이 없어 LANG=ko_KR.utf8을 주면 initdb가 실패한다.
+      # 우리는 텍스트 정렬을 DB에 맡기지 않고(검색은 벡터·BM25로 한다) 인코딩만
+      # UTF-8이면 되므로 C 로케일로 초기화한다.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       - "5432:5432"
     volumes:

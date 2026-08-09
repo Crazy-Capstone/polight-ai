@@ -2,7 +2,12 @@ import logging
 from contextlib import contextmanager
 
 import psycopg2
-from psycopg2.extras import execute_values
+from pgvector.psycopg2 import register_vector
+from psycopg2.extras import execute_values, register_uuid
+
+# psycopg2는 uuid.UUID를 기본으로 어댑트하지 못한다("can't adapt type 'UUID'").
+# 모듈 전역 등록이라 한 번만 호출하면 된다.
+register_uuid()
 
 from app.repositories.base import ChunkHit, ChunkScope
 from app.repositories.pg_mapper import COLUMNS, to_rows
@@ -43,7 +48,10 @@ FROM policy_chunks nxt
 WHERE nxt.analysis_result_id = %(analysis_result_id)s
   AND nxt.chunk_index = %(chunk_index)s + 1
   AND nxt.clause_type = 'excluded'
-  AND nxt.coverage_category IS NOT DISTINCT FROM %(coverage_category)s
+  -- 카테고리가 둘 다 있고 같을 때만 묶는다. link_exclusion_pairs와 같은 조건이라야
+  -- 파일 저장소와 pgvector가 같은 짝을 낸다. IS NOT DISTINCT FROM을 쓰면
+  -- NULL끼리도 묶여 파일 쪽보다 짝이 늘어난다(실측 12쌍 대 11쌍).
+  AND nxt.coverage_category = %(coverage_category)s
 """
 
 
@@ -58,6 +66,9 @@ class PgVectorRepository:
     @contextmanager
     def _cursor(self, commit: bool = False):
         connection = psycopg2.connect(self._dsn)
+        # vector 타입은 확장이 정의한 것이라 연결마다 등록해야 한다.
+        # 등록하면 파이썬 리스트를 그대로 넣고 읽을 수 있다.
+        register_vector(connection)
         try:
             with connection.cursor() as cursor:
                 yield cursor
@@ -132,7 +143,9 @@ class PgVectorRepository:
             return []
 
         hits = [self._to_hit(row) for row in rows]
-        index = BM25Index([f"{h.section_title}\n{h.text}" for h in hits])
+        # 색인 대상은 파일 저장소와 같아야 한다. 임베딩할 때 쓴 텍스트
+        # (특약명 + 조항 제목 + 본문)와 일치시켜야 두 저장소가 같은 결과를 낸다.
+        index = BM25Index([f"{h.clause_path or ''}\n{h.section_title}\n{h.text}" for h in hits])
         scores = index.scores(query)
 
         ranked = sorted(zip(hits, scores), key=lambda pair: -pair[1])
