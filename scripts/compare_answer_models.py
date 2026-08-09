@@ -46,8 +46,18 @@ UNANSWERABLE = [
 ]
 
 
+# 호출 자체가 실패한 답변에 붙이는 표시. 채점에서 제외해야 한다.
+FAILURE_MARK = "[호출 실패]"
+
+
 def cites_evidence(answer: str) -> bool:
-    return bool(re.search(r"\[근거\s*\d+\]", answer))
+    """근거 번호를 표기했는가.
+
+    닫는 괄호를 요구하면 안 된다. 모델마다 묶는 방식이 달라서
+    Claude는 [근거 1][근거 2]로, Gemini는 [근거 1, 근거 2, 근거 3]으로 쓴다.
+    후자를 놓치면 인용을 하고 있는데도 안 한 것으로 세게 된다(실측 92% -> 33%).
+    """
+    return bool(re.search(r"\[근거\s*\d+", answer))
 
 
 def refuses(answer: str) -> bool:
@@ -86,9 +96,24 @@ def main() -> None:
 
     for name, field in skipped:
         print(f"건너뜀: {name} ({field} 없음)")
-    if not runnable:
+
+    # 사전 점검. 키가 있어도 모델이 막혀 있을 수 있다. Gemini 무료 등급은 pro 계열에서
+    # 429를, 구버전 모델에서 404를 낸다. 미리 1건씩 찔러 걸러내지 않으면 14문항을
+    # 전부 실패로 태우고 나서야 알게 된다.
+    alive = []
+    for name in runnable:
+        try:
+            generate("짧게 답하세요.", "1+1은?", provider_name=name)
+            alive.append(name)
+        except Exception as e:
+            reason = ("무료 한도 초과 (결제 등록 필요)" if "429" in str(e)
+                      else "모델 사용 불가" if "404" in str(e) else str(e)[:70])
+            print(f"건너뜀: {name} — {reason}")
+
+    if not alive:
         print("\n실행 가능한 벤더가 없습니다. .env에 키를 넣어주세요.")
         return
+    runnable = alive
     print(f"비교 대상: {', '.join(runnable)}\n")
 
     questions = json.loads(QUESTIONS_PATH.read_text(encoding="utf-8"))
@@ -120,27 +145,35 @@ def main() -> None:
             try:
                 answer, elapsed = generate(SYSTEM_PROMPT, contexts[case["id"]], provider_name=name)
             except Exception as e:
-                answer, elapsed = f"[호출 실패] {e}", 0.0
+                answer, elapsed = f"{FAILURE_MARK} {e}", 0.0
             results[name].append({**case, "answer": answer, "seconds": elapsed})
         print(f"  {name:14} {len(cases)}문항 {time.time() - started:.0f}초")
 
     print("\n[3] 자동 채점")
-    print(f"  {'모델':14} {'인용률':>7} {'환각방지':>8} {'평균응답':>9}")
-    print("  " + "-" * 42)
+    print(f"  {'모델':14} {'인용률':>7} {'환각방지':>8} {'평균응답':>9} {'실패':>6}")
+    print("  " + "-" * 49)
     summary = []
     for name in runnable:
         rows = results[name]
-        answerable = [r for r in rows if r["answerable"]]
-        unanswerable = [r for r in rows if not r["answerable"]]
+        # 호출 실패는 채점에서 뺀다. 답변으로 세면 인용률이 깎이고, 실패 시각을
+        # 0초로 기록하므로 평균 응답시간까지 실제보다 빠르게 나온다.
+        ok = [r for r in rows if not r["answer"].startswith(FAILURE_MARK)]
+        failed = len(rows) - len(ok)
 
-        cite_rate = sum(cites_evidence(r["answer"]) for r in answerable) / len(answerable)
+        answerable = [r for r in ok if r["answerable"]]
+        unanswerable = [r for r in ok if not r["answerable"]]
+
+        cite_rate = (sum(cites_evidence(r["answer"]) for r in answerable) / len(answerable)
+                     if answerable else 0.0)
         refuse_rate = (sum(refuses(r["answer"]) for r in unanswerable) / len(unanswerable)
                        if unanswerable else 0.0)
-        avg = sum(r["seconds"] for r in rows) / len(rows)
+        avg = sum(r["seconds"] for r in ok) / len(ok) if ok else 0.0
 
-        print(f"  {name:14} {cite_rate:>6.0%} {refuse_rate:>8.0%} {avg:>8.1f}초")
+        mark = f"{failed}건" if failed else "-"
+        print(f"  {name:14} {cite_rate:>6.0%} {refuse_rate:>8.0%} {avg:>8.1f}초 {mark:>6}")
         summary.append({"provider": name, "citation_rate": round(cite_rate, 3),
-                        "refusal_rate": round(refuse_rate, 3), "avg_seconds": round(avg, 2)})
+                        "refusal_rate": round(refuse_rate, 3), "avg_seconds": round(avg, 2),
+                        "failed_calls": failed, "scored_calls": len(ok)})
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUTPUT_DIR / "answer_model_comparison.json").write_text(

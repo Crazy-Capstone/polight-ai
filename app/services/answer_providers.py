@@ -43,13 +43,19 @@ PROVIDERS: dict[str, AnswerProvider] = {
         name="claude-sonnet", vendor="anthropic",
         model="claude-sonnet-5", api_key_field="anthropic_api_key",
     ),
+    # Gemini는 무료 등급에서 flash 계열만 돌아간다. pro는 결제를 등록해야
+    # 429가 나지 않는다. 2.5 계열은 신규 사용자에게 더 이상 열리지 않아 404가 난다.
     "gemini-flash": AnswerProvider(
         name="gemini-flash", vendor="google",
-        model="gemini-2.5-flash", api_key_field="google_api_key",
+        model="gemini-3.6-flash", api_key_field="google_api_key",
+    ),
+    "gemini-flash-35": AnswerProvider(
+        name="gemini-flash-35", vendor="google",
+        model="gemini-3.5-flash", api_key_field="google_api_key",
     ),
     "gemini-pro": AnswerProvider(
         name="gemini-pro", vendor="google",
-        model="gemini-2.5-pro", api_key_field="google_api_key",
+        model="gemini-3.1-pro-preview", api_key_field="google_api_key",
     ),
 }
 
