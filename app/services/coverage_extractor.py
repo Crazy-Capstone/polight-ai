@@ -156,7 +156,7 @@ def extract_coverage_item(
     )
 
     response = client.chat.completions.create(
-        model=model or settings.llm_model,
+        model=model or settings.extraction_model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
