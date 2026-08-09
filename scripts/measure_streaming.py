@@ -25,7 +25,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.repositories import get_vector_repository  # noqa: E402
 from app.services.answer_providers import PROVIDERS  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
-from app.services.prompt_builder import SYSTEM_PROMPT_V2 as SYSTEM_PROMPT  # noqa: E402
+from app.services.prompt_builder import SYSTEM_PROMPT  # noqa: E402
 from app.services.rag_service import (  # noqa: E402
     attach_related_chunks,
     build_user_message,

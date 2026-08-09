@@ -26,7 +26,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.repositories import get_vector_repository  # noqa: E402
 from app.services.answer_providers import PROVIDERS, generate  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
-from app.services.prompt_builder import SYSTEM_PROMPT, SYSTEM_PROMPT_V2  # noqa: E402
+from app.services.prompt_builder import SYSTEM_PROMPT, SYSTEM_PROMPT_V1  # noqa: E402
 from app.services.rag_service import (  # noqa: E402
     NO_EVIDENCE_ANSWER,
     attach_related_chunks,
@@ -100,7 +100,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    system_prompt = SYSTEM_PROMPT_V2 if args.prompt == "v2" else SYSTEM_PROMPT
+    system_prompt = SYSTEM_PROMPT if args.prompt == "v2" else SYSTEM_PROMPT_V1
     suffix = args.out or args.prompt
     print(f"시스템 프롬프트: {args.prompt}\n")
 
