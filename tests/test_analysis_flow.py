@@ -167,14 +167,25 @@ def test_callback_carries_extracted_coverage_items(monkeypatch, stub_pipeline_io
 def test_source_chunk_ids_are_mapped_to_saved_uuids(monkeypatch, stub_pipeline_io, captured_callbacks):
     monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
 
-    item = CoverageItem(
-        title="담보", category="baggage", isCovered=True, coverageStatus="COVERED",
-        sources=[CoverageSource(chunkId="test_0001", sourceRole="COVERAGE")],
-    )
-    monkeypatch.setattr(analysis_service, "extract_all", lambda chunks, **kwargs: ([item], []))
+    def _item_for(chunks):
+        return CoverageItem(
+            title="담보", category="baggage", isCovered=True, coverageStatus="COVERED",
+            sources=[CoverageSource(chunkId=chunks[0]["chunk_id"], sourceRole="COVERAGE")],
+        )
 
-    repo = FakeVectorRepository()
-    repo.last_id_map = {"test_0001": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}
+    # 저장소가 INSERT하며 청크에 policy_chunk_id를 실어주는 동작을 흉내낸다.
+    # 인스턴스 상태가 아니라 청크로 전달해야 동시 분석에서 서로 덮어쓰지 않는다.
+    class UuidStampingRepo(FakeVectorRepository):
+        def save(self, chunks, embeddings, analysis_result_id=None, scope=None):
+            for c in chunks:
+                c["policy_chunk_id"] = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+            super().save(chunks, embeddings, analysis_result_id, scope)
+
+    repo = UuidStampingRepo()
+    monkeypatch.setattr(
+        analysis_service, "extract_all",
+        lambda chunks, **kwargs: ([_item_for(chunks)], []),
+    )
     analysis_service.process_analysis(REQUEST, repository=repo)
 
     sent = captured_callbacks[0][1]["coverageItems"][0]

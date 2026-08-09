@@ -1,6 +1,7 @@
 import logging
 from contextlib import contextmanager
 
+import numpy as np
 import psycopg2
 from pgvector.psycopg2 import register_vector
 from psycopg2.extras import execute_values, register_uuid
@@ -15,12 +16,48 @@ from app.services.bm25 import BM25Index
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize(vector) -> list[float] | None:
+    """읽어온 임베딩을 MMR이 쓸 수 있게 정규화한다.
+
+    register_vector를 쓰면 pgvector가 리스트가 아니라 Vector 객체를 돌려주므로
+    numpy로 바꿔야 한다. 그리고 MMR은 정규화된 벡터의 내적을 코사인 유사도로 쓰는데
+    pgvector에는 원본이 저장되므로 여기서 정규화한다.
+    """
+    if vector is None:
+        return None
+
+    array = vector.to_numpy() if hasattr(vector, "to_numpy") else np.asarray(vector, dtype=np.float32)
+    norm = float(np.linalg.norm(array))
+    return (array / norm).tolist() if norm else array.tolist()
+
 # 검색 결과를 ChunkHit으로 만들 때 필요한 컬럼들.
 # id를 chunk_id로 쓴다 - 콜백의 sources[].chunkId가 이 UUID여야 Spring이
 # coverage_item_sources를 채울 수 있기 때문이다.
+# embedding까지 가져오는 이유: MMR 재순위가 청크 간 유사도를 계산하려면 벡터가 필요하다.
+# 빠뜨리면 mmr_select가 "임베딩이 없다"며 재순위를 건너뛰어, 반복되는 표준 조항이
+# top-k를 잠식하는 문제가 그대로 돌아온다(파일 저장소에서 Recall@8 83%->92% 차이를 만든 부분).
 SELECT_FIELDS = """
-    id, document_id, chunk_index, page_start, page_end,
-    section_title, clause_path, coverage_category, clause_type, content
+    c.id, c.document_id, c.chunk_index, c.page_start, c.page_end,
+    c.section_title, c.clause_path, c.coverage_category, c.clause_type, c.content,
+    c.embedding
+"""
+
+# 면책 짝을 함께 붙인다.
+#
+# DDL에 related_chunk_id 컬럼이 없어 조회 시점에 계산하는데, rag_service는
+# hit.related_chunk_id를 보고 면책 조항을 끌어온다. 검색 결과에 짝의 id가 실리지 않으면
+# 이 프로젝트의 핵심인 "보장 조항에 딸린 면책 조항 동반 조회"가 통째로 작동하지 않는다.
+#
+# 규칙은 청킹 때(link_exclusion_pairs)와 같다: included 조항 바로 다음이 같은 카테고리의
+# excluded면 짝이다. UNIQUE(analysis_result_id, chunk_index)가 순서를 보장한다.
+RELATED_JOIN = """
+LEFT JOIN policy_chunks rel
+       ON rel.analysis_result_id = c.analysis_result_id
+      AND rel.chunk_index = c.chunk_index + 1
+      AND c.clause_type = 'included'
+      AND rel.clause_type = 'excluded'
+      AND rel.coverage_category = c.coverage_category
 """
 
 INSERT_SQL = f"""
@@ -31,27 +68,30 @@ ON CONFLICT (analysis_result_id, chunk_index) DO NOTHING
 
 # pgvector의 <=> 는 코사인 거리(0에 가까울수록 유사)라, 유사도로 쓰려면 1에서 뺀다.
 SEARCH_SQL = f"""
-SELECT {SELECT_FIELDS}, 1 - (embedding <=> %(vector)s::vector) AS score
-FROM policy_chunks
-WHERE embedding IS NOT NULL
+SELECT {SELECT_FIELDS}, rel.id AS related_id,
+       1 - (c.embedding <=> %(vector)s::vector) AS score
+FROM policy_chunks c
+{RELATED_JOIN}
+WHERE c.embedding IS NOT NULL
   {{scope}}
-ORDER BY embedding <=> %(vector)s::vector
+ORDER BY c.embedding <=> %(vector)s::vector
 LIMIT %(top_k)s
 """
 
-# related_chunk_id 컬럼이 DDL에 없어서, 면책 페어링을 조회 시점에 다시 계산한다.
-# 규칙은 청킹 때와 같다: included 조항 바로 다음이 같은 카테고리의 excluded면 짝이다.
-# UNIQUE(analysis_result_id, chunk_index)가 순서를 보장하므로 인덱스 +1로 찾을 수 있다.
-RELATED_SQL = f"""
-SELECT {SELECT_FIELDS}, 0.0 AS score
-FROM policy_chunks nxt
-WHERE nxt.analysis_result_id = %(analysis_result_id)s
-  AND nxt.chunk_index = %(chunk_index)s + 1
-  AND nxt.clause_type = 'excluded'
-  -- 카테고리가 둘 다 있고 같을 때만 묶는다. link_exclusion_pairs와 같은 조건이라야
-  -- 파일 저장소와 pgvector가 같은 짝을 낸다. IS NOT DISTINCT FROM을 쓰면
-  -- NULL끼리도 묶여 파일 쪽보다 짝이 늘어난다(실측 12쌍 대 11쌍).
-  AND nxt.coverage_category = %(coverage_category)s
+TEXT_SQL = f"""
+SELECT {SELECT_FIELDS}, rel.id AS related_id, 0.0 AS score
+FROM policy_chunks c
+{RELATED_JOIN}
+{{scope}}
+"""
+
+# ChunkHit.chunk_id는 문자열이라 UUID 컬럼과 직접 비교되지 않는다
+# ("operator does not exist: uuid = text"). 명시적으로 캐스팅한다.
+BY_IDS_SQL = f"""
+SELECT {SELECT_FIELDS}, rel.id AS related_id, 0.0 AS score
+FROM policy_chunks c
+{RELATED_JOIN}
+WHERE c.id = ANY(%(ids)s::uuid[])
 """
 
 
@@ -109,7 +149,17 @@ class PgVectorRepository:
         with self._cursor(commit=True) as cursor:
             execute_values(cursor, INSERT_SQL, rows, page_size=200)
 
-        self.last_id_map = id_map
+        # 생성한 UUID를 청크에 직접 실어 돌려준다.
+        #
+        # 저장소를 인스턴스 변수(last_id_map)에 담아두면 안 된다.
+        # get_vector_repository()가 lru_cache라 저장소는 싱글턴이고, 두 건의 분석이
+        # 동시에 돌면 나중 것이 앞의 것을 덮어써 콜백에 엉뚱한 UUID가 실린다.
+        # 청크는 요청마다 별개의 객체라 이런 문제가 없다.
+        for chunk in chunks:
+            uuid = id_map.get(chunk["chunk_id"])
+            if uuid:
+                chunk["policy_chunk_id"] = str(uuid)
+
         logger.info("policy_chunks 저장 완료: %d행", len(rows))
 
     # ── 질의 ─────────────────────────────────────────────────
@@ -120,7 +170,7 @@ class PgVectorRepository:
         policy_id: str | None = None,
         top_k: int = 8,
     ) -> list[ChunkHit]:
-        scope = "AND policy_id = %(policy_id)s" if policy_id else ""
+        scope = "AND c.policy_id = %(policy_id)s" if policy_id else ""
         sql = SEARCH_SQL.format(scope=scope)
 
         with self._cursor() as cursor:
@@ -141,8 +191,8 @@ class PgVectorRepository:
         policy_id: str | None = None,
         top_k: int = 8,
     ) -> list[ChunkHit]:
-        scope = "WHERE policy_id = %(policy_id)s" if policy_id else ""
-        sql = f"SELECT {SELECT_FIELDS}, 0.0 AS score FROM policy_chunks {scope}"
+        scope = "WHERE c.policy_id = %(policy_id)s" if policy_id else ""
+        sql = TEXT_SQL.format(scope=scope)
 
         with self._cursor() as cursor:
             cursor.execute(sql, {"policy_id": policy_id})
@@ -172,27 +222,10 @@ class PgVectorRepository:
         if not chunk_ids:
             return []
 
-        sql = f"SELECT {SELECT_FIELDS}, 0.0 AS score FROM policy_chunks WHERE id = ANY(%(ids)s)"
         with self._cursor() as cursor:
-            cursor.execute(sql, {"ids": list(chunk_ids)})
+            cursor.execute(BY_IDS_SQL, {"ids": list(chunk_ids)})
             return [self._to_hit(row) for row in cursor.fetchall()]
 
-    def find_related_exclusion(self, hit: ChunkHit, analysis_result_id: str) -> ChunkHit | None:
-        if hit.coverage_type != "included":
-            return None
-
-        with self._cursor() as cursor:
-            cursor.execute(
-                RELATED_SQL,
-                {
-                    "analysis_result_id": analysis_result_id,
-                    "chunk_index": hit.chunk_index,
-                    "coverage_category": hit.matched_category,
-                },
-            )
-            row = cursor.fetchone()
-
-        return self._to_hit(row) if row else None
 
     @staticmethod
     def _to_hit(row: tuple) -> ChunkHit:
@@ -207,6 +240,8 @@ class PgVectorRepository:
             coverage_category,
             clause_type,
             content,
+            embedding,
+            related_id,
             score,
         ) = row
 
@@ -219,8 +254,11 @@ class PgVectorRepository:
             coverage_type=clause_type,
             text=content,
             matched_category=coverage_category,
-            related_chunk_id=None,
+            related_chunk_id=str(related_id) if related_id else None,
             score=float(score),
+            # MMR은 정규화된 벡터의 내적을 코사인 유사도로 쓴다.
+            # pgvector에는 원본 벡터가 저장되므로 읽을 때 정규화한다.
+            embedding=_normalize(embedding),
         )
         hit.chunk_index = chunk_index
         hit.clause_path = clause_path

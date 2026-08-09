@@ -122,9 +122,11 @@ def process_analysis(
         _safe_notify_fail(request.analysis_result_id, str(e))
         return
 
-    # pgvector 저장소는 INSERT하며 policy_chunks.id(UUID)를 만든다.
-    # coverage_item_sources가 그 UUID를 FK로 참조하므로 콜백에 실어 보내야 한다.
+    # pgvector 저장소는 INSERT하며 policy_chunks.id(UUID)를 만들고 청크에 실어준다.
+    # coverage_item_sources가 그 UUID를 FK로 참조하므로 콜백에 그대로 전달한다.
+    # 저장소 인스턴스가 아니라 청크에서 읽는 이유는, 저장소가 싱글턴이라
+    # 동시 분석 시 인스턴스 상태를 쓰면 서로 덮어쓰기 때문이다.
     chunk_id_map = {
-        chunk_id: str(uuid) for chunk_id, uuid in getattr(repository, "last_id_map", {}).items()
+        c["chunk_id"]: c["policy_chunk_id"] for c in chunks if c.get("policy_chunk_id")
     }
     _safe_notify_complete(request.analysis_result_id, chunks, chunk_id_map)
