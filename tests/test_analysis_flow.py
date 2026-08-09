@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.schemas.analysis import AnalysisStartRequest
+from app.schemas.coverage import CoverageItem, CoverageSource
 from app.services import analysis_service
 from tests.conftest import FakeVectorRepository
 
@@ -30,11 +31,16 @@ SAMPLE_ELEMENTS = [
 
 @pytest.fixture
 def stub_pipeline_io(monkeypatch):
-    """PDF 다운로드와 Upstage 파싱만 대체한다. 청킹과 스코프 주입은 실제 코드가 돈다."""
+    """외부 호출만 대체한다. 청킹과 스코프 주입은 실제 코드가 돈다.
+
+    보장항목 추출도 막는다. 막지 않으면 테스트가 실제 LLM을 호출해
+    느려지고(실측 13초) 비용이 들며 네트워크 없이는 실패한다.
+    """
     monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: Path("policy.pdf"))
     monkeypatch.setattr(
         "app.services.chunking_service.parse_pdf", lambda path, **kwargs: SAMPLE_ELEMENTS
     )
+    monkeypatch.setattr(analysis_service, "extract_all", lambda chunks, **kwargs: ([], []))
 
 
 @pytest.fixture
@@ -127,6 +133,52 @@ def test_chunks_are_saved_before_complete_callback(monkeypatch, stub_pipeline_io
     analysis_service.process_analysis(REQUEST, repository=OrderTrackingRepo())
 
     assert order == ["save", "complete"]
+
+
+# 콜백의 coverageItems는 청크 하나당 하나가 아니라 담보 단위여야 한다.
+# 이전에는 청크를 그대로 뒤집어 "제33조(약관의 해석)" 같은 조항 제목이 130개 넘게 나갔고,
+# coverage_items 테이블에 넣어도 화면에 쓸 수 없었다.
+def test_callback_carries_extracted_coverage_items(monkeypatch, stub_pipeline_io, captured_callbacks):
+    monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
+
+    item = CoverageItem(
+        title="해외여행중 휴대품손해(분실제외) 특별약관",
+        category="baggage",
+        isCovered=True,
+        coverageStatus="COVERED",
+        limitAmount=200000,
+        sources=[CoverageSource(chunkId="test_0001", sourceRole="LIMIT", quoteText="…")],
+    )
+    monkeypatch.setattr(analysis_service, "extract_all", lambda chunks, **kwargs: ([item], []))
+
+    analysis_service.process_analysis(REQUEST, repository=FakeVectorRepository())
+
+    kind, payload = captured_callbacks[0]
+    assert kind == "complete"
+    assert len(payload["coverageItems"]) == 1
+    sent = payload["coverageItems"][0]
+    assert sent["title"] == "해외여행중 휴대품손해(분실제외) 특별약관"
+    assert sent["coverageStatus"] == "COVERED"
+    assert sent["limitAmount"] == 200000
+
+
+# sourceChunkIds는 policy_chunks.id(UUID)여야 Spring이 coverage_item_sources를
+# FK로 연결할 수 있다. 저장소가 INSERT하며 만든 UUID로 치환돼야 한다.
+def test_source_chunk_ids_are_mapped_to_saved_uuids(monkeypatch, stub_pipeline_io, captured_callbacks):
+    monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
+
+    item = CoverageItem(
+        title="담보", category="baggage", isCovered=True, coverageStatus="COVERED",
+        sources=[CoverageSource(chunkId="test_0001", sourceRole="COVERAGE")],
+    )
+    monkeypatch.setattr(analysis_service, "extract_all", lambda chunks, **kwargs: ([item], []))
+
+    repo = FakeVectorRepository()
+    repo.last_id_map = {"test_0001": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}
+    analysis_service.process_analysis(REQUEST, repository=repo)
+
+    sent = captured_callbacks[0][1]["coverageItems"][0]
+    assert sent["sourceChunkIds"] == ["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"]
 
 
 # 파이프라인이 실패하면 실패 콜백이 나가야 한다. 조용히 끝나면 Spring은 영원히 PROCESSING이다.
