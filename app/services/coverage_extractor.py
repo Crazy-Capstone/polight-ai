@@ -136,6 +136,68 @@ def validate_against_source(item: CoverageItem, chunks: list[dict]) -> list[str]
 # 250페이지를 통째로 주면 느리고 불안정할 뿐 아니라, 결과가 약관 어디에서 나왔는지
 # 알 수 없어 coverage_item_sources(근거 연결)를 채울 수 없다.
 # 조각을 직접 넣으면 chunkId가 그대로 따라온다.
+# 한 번에 보낼 조각의 최대 글자 수.
+#
+# 실측에서 medical_expense가 48,276토큰이라 OpenAI의 분당 토큰 한도(30,000)를 넘겨
+# 통째로 실패했다. 가장 중요한 의료비 담보가 빠지는 상황이라 그냥 둘 수 없다.
+# 한국어는 대략 1.5자당 1토큰이므로 30,000자면 약 20,000토큰이고, 출력과
+# 시스템 프롬프트를 더해도 한도 안에 들어온다.
+MAX_CONTEXT_CHARS = 30_000
+
+
+def _split_by_budget(chunks: list[dict], budget: int = MAX_CONTEXT_CHARS) -> list[list[dict]]:
+    """조각을 글자 수 예산에 맞춰 나눈다. 조각 하나는 쪼개지 않는다."""
+    batches: list[list[dict]] = []
+    current: list[dict] = []
+    size = 0
+
+    for chunk in chunks:
+        length = len(chunk["text"]) + len(chunk.get("section_title") or "") + 100
+        if current and size + length > budget:
+            batches.append(current)
+            current, size = [], 0
+        current.append(chunk)
+        size += length
+
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _merge_items(items: list[CoverageItem]) -> CoverageItem:
+    """배치별 추출 결과를 담보 하나로 합친다.
+
+    목록형 필드는 이어붙이고 중복만 없앤다. 배치를 나눴다고 면책 조건이 줄면
+    나누는 의미가 없기 때문이다. 단일 값은 처음 채워진 것을 쓴다.
+    앞 배치가 비워둔 값을 뒤 배치가 채우는 경우를 살리기 위해서다.
+    """
+    base = items[0]
+
+    def first(attr):
+        return next((getattr(i, attr) for i in items if getattr(i, attr) is not None), None)
+
+    def merge(attr, key):
+        seen, merged = set(), []
+        for item in items:
+            for entry in getattr(item, attr):
+                marker = key(entry)
+                if marker not in seen:
+                    seen.add(marker)
+                    merged.append(entry)
+        return merged
+
+    base.limit_amount = first("limit_amount")
+    base.limit_label = first("limit_label")
+    base.limit_currency = first("limit_currency")
+    base.conditions = first("conditions")
+    base.detail_items = merge("detail_items", lambda e: e.title)
+    base.sub_limits = merge("sub_limits", lambda e: (e.label, e.value))
+    base.required_documents = merge("required_documents", lambda e: e.document_name)
+    base.exclusions = merge("exclusions", lambda e: e.title)
+    base.sources = merge("sources", lambda e: (e.chunk_id, e.quote_text))
+    return base
+
+
 def extract_coverage_item(
     category: str,
     display_name: str,
@@ -147,6 +209,34 @@ def extract_coverage_item(
     if not chunks:
         return None, [f"{category}: 해당 조각이 없습니다"]
 
+    # 조각이 많으면 나눠 보내고 결과를 합친다. 나누지 않으면 큰 카테고리가
+    # 토큰 한도에 걸려 통째로 실패한다.
+    batches = _split_by_budget(chunks)
+    if len(batches) > 1:
+        logger.info("%s: 조각이 많아 %d개 배치로 나눕니다", category, len(batches))
+        items, warnings = [], []
+        for batch in batches:
+            item, batch_warnings = _extract_single(
+                category, display_name, batch, client, model, provider
+            )
+            if item:
+                items.append(item)
+            warnings.extend(batch_warnings)
+        if not items:
+            return None, warnings
+        return _merge_items(items), warnings
+
+    return _extract_single(category, display_name, chunks, client, model, provider)
+
+
+def _extract_single(
+    category: str,
+    display_name: str,
+    chunks: list[dict],
+    client: OpenAI | None = None,
+    model: str | None = None,
+    provider: str | None = None,
+) -> tuple[CoverageItem | None, list[str]]:
     settings = get_settings()
 
     user_message = (
