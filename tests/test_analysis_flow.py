@@ -16,25 +16,25 @@ REQUEST = AnalysisStartRequest(
 )
 
 
-# is_toc_page가 평균 줄 길이 28자 미만인 페이지를 목차로 보고 제외하므로,
-# 테스트 입력도 실제 약관처럼 충분히 긴 줄로 만들어야 청크가 생성된다.
-SAMPLE_PAGES = [
-    {
-        "page": 1,
-        "text": "제1조(보상하는 손해)\n"
-        + "\n".join(
-            f"{i}. 회사는 피보험자가 해외여행 중 입은 상해에 대하여 보험금을 지급합니다."
-            for i in range(6)
-        ),
-    }
+# Upstage Document Parse가 돌려주는 요소 형태.
+# 조항마다 요소가 나뉘고, category로 문단/표/목록이 구분된다.
+SAMPLE_ELEMENTS = [
+    {"page": 1, "category": "paragraph", "html": "",
+     "text": "제1조(보상하는 손해) 회사는 피보험자가 해외여행 중 입은 상해에 대하여 보험금을 지급합니다."},
+    {"page": 1, "category": "list", "html": "",
+     "text": "1. 해외의료기관에서 발생한 의료비\n2. 국내 병원 입원 치료비"},
+    {"page": 2, "category": "paragraph", "html": "",
+     "text": "제2조(보상하지 않는 손해) 회사는 피보험자의 고의로 생긴 손해는 보상하지 않습니다."},
 ]
 
 
 @pytest.fixture
 def stub_pipeline_io(monkeypatch):
-    """PDF 다운로드와 텍스트 추출만 대체한다. 청킹과 스코프 주입은 실제 코드가 돈다."""
+    """PDF 다운로드와 Upstage 파싱만 대체한다. 청킹과 스코프 주입은 실제 코드가 돈다."""
     monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: Path("policy.pdf"))
-    monkeypatch.setattr(analysis_service, "extract_pages", lambda path: SAMPLE_PAGES)
+    monkeypatch.setattr(
+        "app.services.chunking_service.parse_pdf", lambda path, **kwargs: SAMPLE_ELEMENTS
+    )
 
 
 @pytest.fixture
@@ -79,6 +79,33 @@ def test_pipeline_injects_scope_into_chunks(monkeypatch, stub_pipeline_io, captu
         assert chunk["document_id"] == "doc-1"
 
 
+# policy_chunks.analysis_result_id는 NOT NULL이자 FK다.
+# 저장소에 전달되지 않으면 pgvector INSERT가 실패한다.
+def test_save_receives_persistence_context(monkeypatch, stub_pipeline_io, captured_callbacks):
+    monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
+
+    repo = FakeVectorRepository()
+    analysis_service.process_analysis(REQUEST, repository=repo)
+
+    analysis_result_id, scope = repo.saved_context
+    assert analysis_result_id == "analysis-1"
+    assert scope is not None and scope.policy_id == "policy-1"
+
+
+# Upstage 요소 기반 청킹이므로 policy_chunks의 NOT NULL 컬럼이 채워져야 한다.
+def test_chunks_carry_columns_required_by_ddl(monkeypatch, stub_pipeline_io, captured_callbacks):
+    monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
+
+    repo = FakeVectorRepository()
+    analysis_service.process_analysis(REQUEST, repository=repo)
+
+    chunks, _ = repo.saved[0]
+    for chunk in chunks:
+        assert chunk.get("source_content_type"), "source_content_type이 비었다 (NOT NULL)"
+        assert chunk.get("coverage_type"), "clause_type이 비었다 (NOT NULL)"
+        assert chunk.get("char_count") is not None
+
+
 # 저장이 완료 콜백보다 먼저 일어나야 한다. Spring의 coverage_item_sources가 chunk_id를
 # FK로 참조하므로, 청크 없이 완료를 통지하면 Spring 쪽 INSERT가 실패한다.
 def test_chunks_are_saved_before_complete_callback(monkeypatch, stub_pipeline_io, captured_callbacks):
@@ -87,9 +114,9 @@ def test_chunks_are_saved_before_complete_callback(monkeypatch, stub_pipeline_io
     monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
 
     class OrderTrackingRepo(FakeVectorRepository):
-        def save(self, chunks, embeddings):
+        def save(self, chunks, embeddings, analysis_result_id=None, scope=None):
             order.append("save")
-            super().save(chunks, embeddings)
+            super().save(chunks, embeddings, analysis_result_id, scope)
 
     monkeypatch.setattr(
         analysis_service.spring_client,

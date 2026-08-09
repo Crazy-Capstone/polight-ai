@@ -9,9 +9,8 @@ from app.repositories import VectorRepository, get_vector_repository
 from app.repositories.base import ChunkScope
 from app.schemas.analysis import AnalysisCompleteCallback, AnalysisFailCallback, CoverageItemPayload
 from app.schemas.analysis import AnalysisStartRequest
-from app.services.chunking_service import chunk_pages
+from app.services.chunking_service import parse_and_chunk
 from app.services.embedding_service import embed_chunks
-from app.services.pdf_service import extract_pages
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +83,14 @@ def process_analysis(
 
     try:
         pdf_path = _download_pdf(request.download_url, request.document_id)
-        pages = extract_pages(pdf_path)
-        chunks = chunk_pages(pages, source_file=pdf_path.name, scope=scope)
+        chunks = parse_and_chunk(pdf_path, scope=scope)
         embeddings = embed_chunks(chunks)
-        repository.save(chunks, embeddings)
+        repository.save(
+            chunks,
+            embeddings,
+            analysis_result_id=request.analysis_result_id,
+            scope=scope,
+        )
     except Exception as e:
         logger.exception("analysis pipeline failed: %s", request.analysis_result_id)
         _safe_notify_fail(request.analysis_result_id, str(e))

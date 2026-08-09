@@ -54,8 +54,18 @@ class ChunkHit:
 #   이후  : PgVectorRepository    (policy_chunks INSERT + embedding <=> 검색)
 #   향후  : OpenSearchRepository
 class VectorRepository(Protocol):
-    def save(self, chunks: list[dict], embeddings: dict[str, list[float]]) -> None:
-        """청크와 임베딩을 저장한다. chunk_id가 저장 단위의 키."""
+    def save(
+        self,
+        chunks: list[dict],
+        embeddings: dict[str, list[float]],
+        analysis_result_id: str | None = None,
+        scope: "ChunkScope | None" = None,
+    ) -> None:
+        """청크와 임베딩을 저장한다.
+
+        analysis_result_id와 scope는 policy_chunks의 NOT NULL 컬럼이자 FK라
+        저장 시점에 반드시 필요하다. 파일 저장소는 파일명만으로 구분되므로 무시한다.
+        """
         ...
 
     def search(

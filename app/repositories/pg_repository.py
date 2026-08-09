@@ -79,21 +79,30 @@ class PgVectorRepository:
 
     # ── 색인 ─────────────────────────────────────────────────
 
-    # analysis_result_id와 scope는 분석 요청에서 오므로 save 시그니처만으로는 부족하다.
-    # VectorRepository Protocol을 유지하기 위해 컨텍스트를 미리 심어두는 방식을 쓴다.
+    # 검증 스크립트처럼 save()에 컨텍스트를 넘기기 번거로운 경우를 위해 남겨둔다.
+    # 애플리케이션 경로에서는 save()의 인자로 직접 전달한다.
     def bind(self, analysis_result_id: str, scope: ChunkScope) -> "PgVectorRepository":
         self._analysis_result_id = analysis_result_id
         self._scope = scope
         return self
 
-    def save(self, chunks: list[dict], embeddings: dict[str, list[float]]) -> None:
+    def save(
+        self,
+        chunks: list[dict],
+        embeddings: dict[str, list[float]],
+        analysis_result_id: str | None = None,
+        scope: ChunkScope | None = None,
+    ) -> None:
         if not chunks:
             return
 
-        analysis_result_id = getattr(self, "_analysis_result_id", None)
-        scope = getattr(self, "_scope", None)
+        analysis_result_id = analysis_result_id or getattr(self, "_analysis_result_id", None)
+        scope = scope or getattr(self, "_scope", None)
         if not analysis_result_id or scope is None:
-            raise RuntimeError("save() 전에 bind(analysis_result_id, scope)를 호출해야 합니다.")
+            raise RuntimeError(
+                "policy_chunks는 analysis_result_id와 스코프가 NOT NULL이라 "
+                "save()에 함께 넘기거나 bind()로 미리 지정해야 합니다."
+            )
 
         rows, id_map = to_rows(chunks, embeddings, analysis_result_id, scope)
 

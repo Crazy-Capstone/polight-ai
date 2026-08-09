@@ -37,7 +37,15 @@ class FileVectorRepository:
 
     # ── 색인 (파이프라인 A의 ④) ────────────────────────────────
 
-    def save(self, chunks: list[dict], embeddings: dict[str, list[float]]) -> None:
+    # analysis_result_id와 scope는 pgvector 저장소에서만 쓰인다.
+    # 파일 저장소는 문서 stem으로 파일을 나누므로 받기만 하고 쓰지 않는다.
+    def save(
+        self,
+        chunks: list[dict],
+        embeddings: dict[str, list[float]],
+        analysis_result_id: str | None = None,
+        scope=None,
+    ) -> None:
         if not chunks:
             return
 
