@@ -25,8 +25,8 @@ from app.core.config import get_settings  # noqa: E402
 from app.repositories import get_vector_repository  # noqa: E402
 from app.services.answer_providers import PROVIDERS  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
+from app.services.prompt_builder import SYSTEM_PROMPT_V2 as SYSTEM_PROMPT  # noqa: E402
 from app.services.rag_service import (  # noqa: E402
-    SYSTEM_PROMPT,
     attach_related_chunks,
     build_user_message,
     hybrid_search,
@@ -38,6 +38,7 @@ from app.services.reranker import mmr_select  # noqa: E402
 PRICING = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1": (2.00, 8.00),
     "gpt-4o": (2.50, 10.00),
     "claude-opus-5": (5.00, 25.00),
     "claude-sonnet-5": (3.00, 15.00),
@@ -114,7 +115,7 @@ def stream_anthropic(model: str, system: str, user: str) -> dict:
 CANDIDATES = [
     ("openai-mini", "gpt-4o-mini", stream_openai),
     ("openai-41mini", "gpt-4.1-mini", stream_openai),
-    ("claude-sonnet", "claude-sonnet-5", stream_anthropic),
+    ("openai-41", "gpt-4.1", stream_openai),
     ("claude-opus", "claude-opus-5", stream_anthropic),
 ]
 

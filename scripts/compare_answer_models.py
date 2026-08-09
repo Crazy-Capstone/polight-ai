@@ -26,9 +26,9 @@ from app.core.config import get_settings  # noqa: E402
 from app.repositories import get_vector_repository  # noqa: E402
 from app.services.answer_providers import PROVIDERS, generate  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
+from app.services.prompt_builder import SYSTEM_PROMPT, SYSTEM_PROMPT_V2  # noqa: E402
 from app.services.rag_service import (  # noqa: E402
     NO_EVIDENCE_ANSWER,
-    SYSTEM_PROMPT,
     attach_related_chunks,
     build_user_message,
     hybrid_search,
@@ -60,6 +60,20 @@ def cites_evidence(answer: str) -> bool:
     return bool(re.search(r"\[근거\s*\d+", answer))
 
 
+def evidence_usage(answer: str, context: str) -> tuple[int, int]:
+    """인용한 근거 개수와 제공된 근거 개수.
+
+    인용률(달았나/안 달았나)은 6개 모델이 전부 100%라 변별이 안 됐다.
+    실제 차이는 "몇 개를 썼나"에 있다. 근거 8개를 주면 저가 모델은 3개만 쓰고
+    끝내는 반면, 상위 모델은 8개를 다 활용해 조건과 예외까지 챙긴다.
+    보험 답변에서 조건을 빠뜨리는 것은 틀리는 것과 같으므로 이걸 지표로 삼는다.
+    """
+    provided = len(set(re.findall(r"\[근거 (\d+)\]", context)))
+    used = len(set(re.findall(r"근거\s*(\d+)", answer)))
+    # 없는 번호를 지어내면 제공 개수로 자른다
+    return min(used, provided), provided
+
+
 def refuses(answer: str) -> bool:
     """근거가 없을 때 모른다고 답하는지. 지어내면 False.
 
@@ -80,9 +94,15 @@ def main() -> None:
     parser.add_argument("--providers", nargs="+", default=None,
                         help="생략하면 키가 있는 벤더 전부")
     parser.add_argument("--policy-id", default=None, help="pgvector 모드에서 대상 계약")
+    parser.add_argument("--prompt", choices=["v1", "v2"], default="v1",
+                        help="v2는 완전성과 형식을 지정한 개정판")
+    parser.add_argument("--out", default=None, help="결과 파일 접미사")
     args = parser.parse_args()
 
     settings = get_settings()
+    system_prompt = SYSTEM_PROMPT_V2 if args.prompt == "v2" else SYSTEM_PROMPT
+    suffix = args.out or args.prompt
+    print(f"시스템 프롬프트: {args.prompt}\n")
 
     # 키가 없는 벤더는 조용히 건너뛴다. 세 벤더 키를 다 모으기 전에도
     # 가진 것끼리 비교를 시작할 수 있어야 실험이 막히지 않는다.
@@ -143,15 +163,15 @@ def main() -> None:
         started = time.time()
         for case in cases:
             try:
-                answer, elapsed = generate(SYSTEM_PROMPT, contexts[case["id"]], provider_name=name)
+                answer, elapsed = generate(system_prompt, contexts[case["id"]], provider_name=name)
             except Exception as e:
                 answer, elapsed = f"{FAILURE_MARK} {e}", 0.0
             results[name].append({**case, "answer": answer, "seconds": elapsed})
         print(f"  {name:14} {len(cases)}문항 {time.time() - started:.0f}초")
 
     print("\n[3] 자동 채점")
-    print(f"  {'모델':14} {'인용률':>7} {'환각방지':>8} {'평균응답':>9} {'실패':>6}")
-    print("  " + "-" * 49)
+    print(f"  {'모델':14} {'인용률':>7} {'근거활용':>9} {'환각방지':>8} {'평균응답':>9} {'실패':>6}")
+    print("  " + "-" * 60)
     summary = []
     for name in runnable:
         rows = results[name]
@@ -169,14 +189,21 @@ def main() -> None:
                        if unanswerable else 0.0)
         avg = sum(r["seconds"] for r in ok) / len(ok) if ok else 0.0
 
+        pairs = [evidence_usage(r["answer"], contexts[r["id"]]) for r in answerable]
+        usage = (sum(u for u, _ in pairs) / sum(p for _, p in pairs)) if pairs else 0.0
+        avg_used = sum(u for u, _ in pairs) / len(pairs) if pairs else 0.0
+
         mark = f"{failed}건" if failed else "-"
-        print(f"  {name:14} {cite_rate:>6.0%} {refuse_rate:>8.0%} {avg:>8.1f}초 {mark:>6}")
+        print(f"  {name:14} {cite_rate:>6.0%} {usage:>8.0%} {refuse_rate:>8.0%} "
+              f"{avg:>8.1f}초 {mark:>6}")
         summary.append({"provider": name, "citation_rate": round(cite_rate, 3),
+                        "evidence_usage_rate": round(usage, 3),
+                        "avg_evidence_used": round(avg_used, 1),
                         "refusal_rate": round(refuse_rate, 3), "avg_seconds": round(avg, 2),
                         "failed_calls": failed, "scored_calls": len(ok)})
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUTPUT_DIR / "answer_model_comparison.json").write_text(
+    (OUTPUT_DIR / f"answer_comparison_{suffix}.json").write_text(
         json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -189,11 +216,11 @@ def main() -> None:
         for name in runnable:
             row = next(r for r in results[name] if r["id"] == case["id"])
             lines.append(f"\n### {name} ({row['seconds']:.1f}초)\n\n{row['answer']}\n")
-    (OUTPUT_DIR / "answer_model_comparison.md").write_text("\n".join(lines), encoding="utf-8")
+    (OUTPUT_DIR / f"answer_comparison_{suffix}.md").write_text("\n".join(lines), encoding="utf-8")
 
     print("\n저장:")
-    print("  data/eval/answer_model_comparison.json  (점수)")
-    print("  data/eval/answer_model_comparison.md    (답변 전문 — 직접 읽고 판단)")
+    print(f"  data/eval/answer_comparison_{suffix}.json  (점수)")
+    print(f"  data/eval/answer_comparison_{suffix}.md    (답변 전문)")
 
 
 if __name__ == "__main__":

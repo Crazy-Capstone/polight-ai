@@ -21,6 +21,9 @@ class AnswerProvider:
     vendor: str  # openai | anthropic | google
     model: str
     api_key_field: str
+    # gpt-5 / gpt-5-mini는 temperature를 아예 받지 않고 400을 낸다.
+    # 같은 벤더 안에서도 갈리므로 모델마다 표시한다.
+    supports_temperature: bool = True
 
 
 PROVIDERS: dict[str, AnswerProvider] = {
@@ -29,9 +32,30 @@ PROVIDERS: dict[str, AnswerProvider] = {
         name="openai-mini", vendor="openai",
         model="gpt-4o-mini", api_key_field="openai_api_key",
     ),
+    "openai-41mini": AnswerProvider(
+        name="openai-41mini", vendor="openai",
+        model="gpt-4.1-mini", api_key_field="openai_api_key",
+    ),
     "openai-4o": AnswerProvider(
         name="openai-4o", vendor="openai",
         model="gpt-4o", api_key_field="openai_api_key",
+    ),
+    "openai-41": AnswerProvider(
+        name="openai-41", vendor="openai",
+        model="gpt-4.1", api_key_field="openai_api_key",
+    ),
+    "openai-5": AnswerProvider(
+        name="openai-5", vendor="openai",
+        model="gpt-5", api_key_field="openai_api_key",
+        supports_temperature=False,
+    ),
+    "openai-51": AnswerProvider(
+        name="openai-51", vendor="openai",
+        model="gpt-5.1", api_key_field="openai_api_key",
+    ),
+    "openai-52": AnswerProvider(
+        name="openai-52", vendor="openai",
+        model="gpt-5.2", api_key_field="openai_api_key",
     ),
     "claude-opus": AnswerProvider(
         name="claude-opus", vendor="anthropic",
@@ -83,11 +107,14 @@ def _api_key(provider: AnswerProvider) -> str:
 def _generate_openai(provider: AnswerProvider, system: str, user: str) -> str:
     from openai import OpenAI
 
+    # 약관 해석은 표현이 흔들리면 안 되므로 결정적으로 생성한다.
+    # 다만 이를 받지 않는 모델이 있어, 지원하는 모델에만 넘긴다.
+    extra = {"temperature": 0} if provider.supports_temperature else {}
+
     response = OpenAI(api_key=_api_key(provider)).chat.completions.create(
         model=provider.model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        # 약관 해석은 표현이 흔들리면 안 되므로 결정적으로 생성한다
-        temperature=0,
+        **extra,
     )
     return (response.choices[0].message.content or "").strip()
 
