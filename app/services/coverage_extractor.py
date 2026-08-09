@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -9,7 +10,8 @@ from app.schemas.coverage import CoverageItem
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT_CATEGORIES = "config/standard_categories.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+STANDARD_CATEGORIES_PATH = PROJECT_ROOT / "config" / "standard_categories.json"
 
 # 조각을 프롬프트에 넣을 때의 라벨. 조항 성격을 명시해야 LLM이
 # 보장 조건과 면책 사유를 섞지 않는다.
@@ -179,3 +181,44 @@ def extract_coverage_item(
         logger.info("%s: 근거 chunkId %d건 교정", category, repaired)
 
     return item, validate_against_source(item, chunks)
+
+
+def load_categories() -> dict:
+    with STANDARD_CATEGORIES_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# 청크 전체에서 카테고리별로 보장 항목을 뽑는다.
+#
+# 카테고리 하나가 실패해도 나머지는 살린다. 분석 전체를 실패로 돌리면 어렵게 만든
+# policy_chunks까지 무의미해지고, 보장 항목 일부가 비는 것이 전부 없는 것보다 낫다.
+def extract_all(
+    chunks: list[dict],
+    client: OpenAI | None = None,
+    model: str | None = None,
+) -> tuple[list[CoverageItem], list[str]]:
+    categories = load_categories()
+    items: list[CoverageItem] = []
+    warnings: list[str] = []
+
+    # ui_priority 순으로 만들어 coverage_items.sort_order에 그대로 쓴다
+    for category, meta in sorted(categories.items(), key=lambda kv: kv[1]["ui_priority"]):
+        matched = [c for c in chunks if c.get("matched_category") == category]
+        if not matched:
+            logger.info("%s: 해당 조각이 없어 건너뜁니다", category)
+            continue
+
+        try:
+            item, item_warnings = extract_coverage_item(
+                category, meta["display_name"], matched, client=client, model=model
+            )
+        except Exception as e:
+            warnings.append(f"{category}: 추출 실패 ({e})")
+            logger.warning("%s 추출 실패: %s", category, e)
+            continue
+
+        if item:
+            items.append(item)
+            warnings.extend(item_warnings)
+
+    return items, warnings

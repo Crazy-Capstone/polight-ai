@@ -41,6 +41,12 @@ class ChunkHit:
     # 경로(get_by_ids 등)에서는 None으로 둔다.
     embedding: list[float] | None = None
 
+    # policy_chunks 컬럼. 파일 저장소에는 없고 pgvector 저장소에서만 채워진다.
+    # chunk_index는 면책 페어링을 조회 시점에 재계산할 때 쓴다
+    # (DDL에 related_chunk_id 컬럼이 없어 인접 인덱스로 짝을 찾는다).
+    chunk_index: int | None = None
+    clause_path: str | None = None
+
 
 # DB 경계선. 파이프라인에서 저장소를 만지는 단계는 save(색인)와 search/get_by_ids(질의)뿐이고,
 # 전부 이 인터페이스 안에 격리된다. 구현체를 갈아끼워도 호출하는 쪽 코드는 바뀌지 않는다.
@@ -48,8 +54,18 @@ class ChunkHit:
 #   이후  : PgVectorRepository    (policy_chunks INSERT + embedding <=> 검색)
 #   향후  : OpenSearchRepository
 class VectorRepository(Protocol):
-    def save(self, chunks: list[dict], embeddings: dict[str, list[float]]) -> None:
-        """청크와 임베딩을 저장한다. chunk_id가 저장 단위의 키."""
+    def save(
+        self,
+        chunks: list[dict],
+        embeddings: dict[str, list[float]],
+        analysis_result_id: str | None = None,
+        scope: "ChunkScope | None" = None,
+    ) -> None:
+        """청크와 임베딩을 저장한다.
+
+        analysis_result_id와 scope는 policy_chunks의 NOT NULL 컬럼이자 FK라
+        저장 시점에 반드시 필요하다. 파일 저장소는 파일명만으로 구분되므로 무시한다.
+        """
         ...
 
     def search(

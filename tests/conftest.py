@@ -14,8 +14,9 @@ class FakeVectorRepository:
         self.text_hits: list[ChunkHit] = []
         self.saved: list[tuple[list[dict], dict]] = []
 
-    def save(self, chunks, embeddings):
+    def save(self, chunks, embeddings, analysis_result_id=None, scope=None):
         self.saved.append((chunks, embeddings))
+        self.saved_context = (analysis_result_id, scope)
 
     def search(self, query_vector, policy_id=None, top_k=8):
         if policy_id is None:
