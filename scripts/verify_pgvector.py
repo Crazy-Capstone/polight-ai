@@ -58,13 +58,19 @@ def seed_parents(dsn: str, scope: ChunkScope, analysis_result_id: str) -> None:
             " ON CONFLICT DO NOTHING",
             (scope.trip_id, scope.user_id, now, now),
         )
-        cur.execute(
-            "INSERT INTO policies (id,user_id,trip_id,insurer_name,product_name,display_name,"
-            "start_date,end_date,status,coverage_count,created_at,updated_at)"
-            " VALUES (%s,%s,%s,'DB손해보험','프로미 해외여행보험','테스트 계약',"
-            "'2026-08-01','2026-08-10','ACTIVE',0,%s,%s) ON CONFLICT DO NOTHING",
-            (scope.policy_id, scope.user_id, scope.trip_id, now, now),
-        )
+        # policies는 policy_id가 실제로 주어질 때만 만든다.
+        #
+        # 운영에서는 백엔드에 policies 행을 만드는 코드가 없어 이 값이 항상 null이다.
+        # 그 상황을 그대로 재현해야 검증이 의미가 있으므로, null이면 건너뛴다.
+        # policy_chunks.policy_id도 nullable이라 없어도 저장에 문제가 없다.
+        if scope.policy_id:
+            cur.execute(
+                "INSERT INTO policies (id,user_id,trip_id,insurer_name,product_name,display_name,"
+                "start_date,end_date,status,coverage_count,created_at,updated_at)"
+                " VALUES (%s,%s,%s,'DB손해보험','프로미 해외여행보험','테스트 계약',"
+                "'2026-08-01','2026-08-10','ACTIVE',0,%s,%s) ON CONFLICT DO NOTHING",
+                (scope.policy_id, scope.user_id, scope.trip_id, now, now),
+            )
         cur.execute(
             "INSERT INTO policy_documents (id,user_id,trip_id,policy_id,original_filename,"
             "stored_file_path,parse_status,uploaded_at,created_at,updated_at)"
