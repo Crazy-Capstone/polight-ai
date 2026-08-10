@@ -24,9 +24,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import get_settings  # noqa: E402
-from app.repositories.base import ChunkScope  # noqa: E402
+from app.repositories.base import ChunkScope, SearchScope  # noqa: E402
 from app.repositories.file_repository import FileVectorRepository  # noqa: E402
 from app.repositories.pg_repository import PgVectorRepository  # noqa: E402
+from app.schemas import db_enums  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
 
 # 로컬 컨테이너 기본값. 운영 권한 구성을 재현한 제한 계정이다.
@@ -128,14 +129,14 @@ def main() -> None:
     question = "임신이나 출산으로 인한 치료비도 보상되나요?"
     vector = embed_query(question)
     started = time.time()
-    hits = repo.search(vector, policy_id=scope.policy_id, top_k=5)
+    hits = repo.search(vector, scope=SearchScope(document_id=scope.document_id), top_k=5)
     elapsed = (time.time() - started) * 1000
     print(f"  '{question}' -> {len(hits)}건, {elapsed:.0f}ms")
     for i, hit in enumerate(hits, 1):
         print(f"    {i}. {hit.score:.4f} [{hit.coverage_type}] {hit.section_title[:44]}")
 
     print("\n[4] 키워드 검색 (BM25)")
-    hits_text = repo.search_text("휴대품 도난", policy_id=scope.policy_id, top_k=3)
+    hits_text = repo.search_text("휴대품 도난", scope=SearchScope(document_id=scope.document_id), top_k=3)
     for i, hit in enumerate(hits_text, 1):
         print(f"    {i}. {hit.score:.2f} {hit.section_title[:50]}")
 
@@ -148,25 +149,30 @@ def main() -> None:
             "SELECT count(*) FROM policy_chunks a JOIN policy_chunks b"
             "  ON b.analysis_result_id = a.analysis_result_id"
             " AND b.chunk_index = a.chunk_index + 1"
-            " WHERE a.analysis_result_id = %s AND a.clause_type = 'included'"
-            "   AND b.clause_type = 'excluded'"
+            " WHERE a.analysis_result_id = %s AND a.clause_type = %s"
+            "   AND b.clause_type = %s"
             "   AND a.coverage_category = b.coverage_category",
-            (analysis_result_id,),
+            (analysis_result_id,
+             db_enums.CLAUSE_TYPE["included"],
+             db_enums.CLAUSE_TYPE["excluded"]),
         )
         sql_pairs = cur.fetchone()[0]
     match = "일치" if sql_pairs == file_pairs else "불일치"
     print(f"  파일 저장소 {file_pairs}쌍 / SQL 재계산 {sql_pairs}쌍 -> {match}")
 
-    included = [h for h in repo.search(vector, policy_id=scope.policy_id, top_k=40)
-                if h.coverage_type == "included"]
-    found = next((repo.find_related_exclusion(h, analysis_result_id) for h in included
-                  if repo.find_related_exclusion(h, analysis_result_id)), None)
-    if found:
-        print(f"  실제 조회 예: {found.section_title[:52]}")
+    # 검색 결과가 짝의 id를 직접 실어오므로, 그게 채워지는지 본다.
+    # 이 값이 비면 rag_service의 면책 동반 조회가 통째로 죽는다.
+    hits40 = repo.search(vector, scope=SearchScope(document_id=scope.document_id), top_k=40)
+    paired = [h for h in hits40 if h.related_chunk_id]
+    print(f"  검색 상위 40건 중 면책 짝을 가진 조항: {len(paired)}건")
+    if paired:
+        related = repo.get_by_ids([paired[0].related_chunk_id])
+        if related:
+            print(f"  실제 조회 예: [{related[0].coverage_type}] {related[0].section_title[:44]}")
 
     print("\n[6] 스코프 필터")
-    others = repo.search(vector, policy_id=str(uuid4()), top_k=5)
-    print(f"  다른 policy_id로 검색 -> {len(others)}건 (0이어야 정상)")
+    others = repo.search(vector, scope=SearchScope(document_id=str(uuid4())), top_k=5)
+    print(f"  다른 document_id로 검색 -> {len(others)}건 (0이어야 정상)")
 
     # 저장소를 갈아끼워도 검색 결과가 같아야 인터페이스 교체가 의미를 갖는다.
     # 파일 저장소는 numpy 내적, pgvector는 <=> 연산자로 계산하므로
@@ -180,8 +186,8 @@ def main() -> None:
     ]
     for text in questions:
         vec = embed_query(text)
-        pg_hits = repo.search(vec, policy_id=scope.policy_id, top_k=5)
-        file_hits = file_repo.search(vec, policy_id="db_travel", top_k=5)
+        pg_hits = repo.search(vec, scope=SearchScope(document_id=scope.document_id), top_k=5)
+        file_hits = file_repo.search(vec, scope=SearchScope(document_id="db_travel"), top_k=5)
         # chunk_id 체계가 달라(UUID 대 문자열) 본문 앞부분으로 비교한다
         pg_keys = [h.text[:60] for h in pg_hits]
         file_keys = [h.text[:60] for h in file_hits]

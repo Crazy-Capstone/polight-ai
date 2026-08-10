@@ -12,6 +12,7 @@ register_uuid()
 
 from app.repositories.base import ChunkHit, ChunkScope, SearchScope
 from app.repositories.pg_mapper import COLUMNS, to_rows
+from app.schemas import db_enums
 from app.services.bm25 import BM25Index
 
 logger = logging.getLogger(__name__)
@@ -49,14 +50,17 @@ SELECT_FIELDS = """
 # hit.related_chunk_id를 보고 면책 조항을 끌어온다. 검색 결과에 짝의 id가 실리지 않으면
 # 이 프로젝트의 핵심인 "보장 조항에 딸린 면책 조항 동반 조회"가 통째로 작동하지 않는다.
 #
-# 규칙은 청킹 때(link_exclusion_pairs)와 같다: included 조항 바로 다음이 같은 카테고리의
-# excluded면 짝이다. UNIQUE(analysis_result_id, chunk_index)가 순서를 보장한다.
-RELATED_JOIN = """
+# 규칙은 청킹 때(link_exclusion_pairs)와 같다: 보장 조항 바로 다음이 같은 카테고리의
+# 면책 조항이면 짝이다. UNIQUE(analysis_result_id, chunk_index)가 순서를 보장한다.
+#
+# 비교값은 DB에 저장된 형태(COVERAGE/EXCLUSION)여야 한다. 내부 값(included/excluded)을
+# 그대로 쓰면 JOIN이 한 건도 매칭되지 않아 면책 동반 조회가 조용히 죽는다.
+RELATED_JOIN = f"""
 LEFT JOIN policy_chunks rel
        ON rel.analysis_result_id = c.analysis_result_id
       AND rel.chunk_index = c.chunk_index + 1
-      AND c.clause_type = 'included'
-      AND rel.clause_type = 'excluded'
+      AND c.clause_type = '{db_enums.CLAUSE_TYPE["included"]}'
+      AND rel.clause_type = '{db_enums.CLAUSE_TYPE["excluded"]}'
       AND rel.coverage_category = c.coverage_category
 """
 
@@ -267,7 +271,9 @@ class PgVectorRepository:
             page_start=page_start or 0,
             page_end=page_end or 0,
             section_title=section_title or "",
-            coverage_type=clause_type,
+            # DB의 COVERAGE를 내부 included로 되돌린다. 그대로 쓰면 프롬프트의
+            # 조항 라벨과 면책 짝짓기 로직이 어긋난다.
+            coverage_type=db_enums.clause_type_to_internal(clause_type),
             text=content,
             matched_category=coverage_category,
             related_chunk_id=str(related_id) if related_id else None,
