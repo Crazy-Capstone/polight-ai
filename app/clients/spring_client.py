@@ -3,6 +3,7 @@ import time
 
 import httpx
 
+from app.core.auth import HEADER_NAME
 from app.core.config import get_settings
 from app.schemas.analysis import AnalysisCompleteCallback, AnalysisFailCallback
 
@@ -48,11 +49,15 @@ def _post(path: str, payload: dict) -> None:
         return
 
     url = f"{settings.spring_base_url.rstrip('/')}{path}"
+
+    # 콜백도 인증이 필요하다. Spring이 같은 키로 검증하므로,
+    # 빠뜨리면 분석은 성공했는데 콜백이 401로 거절돼 상태가 PROCESSING에 남는다.
+    headers = {HEADER_NAME: settings.internal_api_key} if settings.internal_api_key else {}
     last_error: httpx.HTTPError | None = None
 
     for attempt in range(1, CALLBACK_MAX_ATTEMPTS + 1):
         try:
-            response = httpx.post(url, json=payload, timeout=10.0)
+            response = httpx.post(url, json=payload, headers=headers, timeout=10.0)
             response.raise_for_status()
             if attempt > 1:
                 logger.info("Spring 콜백 %d번째 시도에 성공: %s", attempt, url)

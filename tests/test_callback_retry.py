@@ -12,6 +12,7 @@ import httpx
 import pytest
 
 from app.clients import spring_client
+from app.core.config import Settings
 from app.clients.spring_client import SpringCallbackError
 
 PATH = "/internal/analysis-results/a-1/complete"
@@ -20,9 +21,11 @@ PATH = "/internal/analysis-results/a-1/complete"
 @pytest.fixture(autouse=True)
 def no_sleep_and_base_url(monkeypatch):
     monkeypatch.setattr(spring_client.time, "sleep", lambda s: None)
+    # 가짜 객체 대신 실제 Settings를 쓴다. 필드를 추가할 때마다 가짜가
+    # 따라가지 못해 AttributeError로 깨지는 것을 막는다.
     monkeypatch.setattr(
         spring_client, "get_settings",
-        lambda: type("S", (), {"spring_base_url": "http://spring.test"})(),
+        lambda: Settings(spring_base_url="http://spring.test", internal_api_key="test-key"),
     )
 
 
@@ -30,8 +33,8 @@ def make_post(responses: list):
     """호출마다 responses에서 하나 꺼내 쓴다. 예외면 raise, 정수면 그 상태코드."""
     calls = []
 
-    def post(url, json=None, timeout=None):
-        calls.append(url)
+    def post(url, json=None, headers=None, timeout=None):
+        calls.append((url, headers))
         outcome = responses[min(len(calls) - 1, len(responses) - 1)]
         if isinstance(outcome, Exception):
             raise outcome
@@ -103,3 +106,15 @@ def test_backoff_grows(monkeypatch):
         spring_client._post(PATH, {})
 
     assert delays == [2.0, 4.0]
+
+
+# 콜백에도 인증 헤더가 실려야 한다. 빠뜨리면 분석은 성공했는데 콜백이 401로
+# 거절돼 Spring 쪽 상태가 PROCESSING에 영원히 남는다.
+def test_callback_carries_api_key_header(monkeypatch):
+    post, calls = make_post([200])
+    monkeypatch.setattr(spring_client.httpx, "post", post)
+
+    spring_client._post(PATH, {})
+
+    _, headers = calls[0]
+    assert headers[spring_client.HEADER_NAME] == "test-key"

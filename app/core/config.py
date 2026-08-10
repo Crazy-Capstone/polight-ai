@@ -98,6 +98,15 @@ class Settings(BaseSettings):
     # Spring 콜백 대상 (완료/실패 알림). 아직 미확정이면 비워둔 채로 로컬 테스트.
     spring_base_url: str | None = None
 
+    # Spring과 공유하는 내부 API 시크릿. 양방향으로 같은 키를 쓴다.
+    #   Spring -> Python  요청 헤더를 검증
+    #   Python -> Spring  콜백 헤더에 실어 보냄
+    #
+    # 비어 있으면 인증 없이 통과시킨다. 로컬 개발 편의를 위한 것이고,
+    # 배포 환경(SPRING_BASE_URL이 있는 상태)에서는 기동을 막는다.
+    # 생성: openssl rand -base64 32
+    internal_api_key: str = ""
+
     log_level: str = "INFO"
 
 
