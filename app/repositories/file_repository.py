@@ -4,10 +4,25 @@ from pathlib import Path
 
 import numpy as np
 
-from app.repositories.base import ChunkHit
+from app.repositories.base import ChunkHit, SearchScope
 from app.services.bm25 import BM25Index
 
 logger = logging.getLogger(__name__)
+
+
+# 스코프 일치 판정. pgvector 쪽 _scope_condition과 같은 규칙을 쓴다.
+def _scope_key(scope: SearchScope | None) -> str | None:
+    if scope is None or scope.is_empty():
+        return None
+    return scope.document_id or scope.trip_id
+
+
+def _matches(chunk: dict, scope: SearchScope | None) -> bool:
+    if scope is None or scope.is_empty():
+        return True
+    if scope.document_id:
+        return chunk.get("document_id") == scope.document_id
+    return chunk.get("trip_id") == scope.trip_id
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CHUNKS_DIR = PROJECT_ROOT / "data" / "chunks"
@@ -70,7 +85,7 @@ class FileVectorRepository:
     def search(
         self,
         query_vector: list[float],
-        policy_id: str | None = None,
+        scope: SearchScope | None = None,
         top_k: int = 8,
     ) -> list[ChunkHit]:
         self._ensure_loaded()
@@ -87,15 +102,15 @@ class FileVectorRepository:
 
         scores = self._matrix @ query  # (N,) — 전체 청크 유사도를 한 번에 계산
 
-        # policy_id 필터는 점수 계산 후 마스킹으로 처리한다.
+        # 스코프 필터는 점수 계산 후 마스킹으로 처리한다.
         # 청크 수가 적어 전수 계산 비용이 무시할 수준이고, 코드가 단순해진다.
-        if policy_id is not None:
+        if _scope_key(scope) is not None:
             mask = np.array(
-                [c.get("policy_id") == policy_id for c in self._chunks],
+                [_matches(c, scope) for c in self._chunks],
                 dtype=bool,
             )
             if not mask.any():
-                logger.warning("policy_id=%s 에 해당하는 청크가 없습니다.", policy_id)
+                logger.warning("스코프 %s 에 해당하는 청크가 없습니다.", _scope_key(scope))
                 return []
             scores = np.where(mask, scores, -np.inf)
 
@@ -112,7 +127,7 @@ class FileVectorRepository:
     def search_text(
         self,
         query: str,
-        policy_id: str | None = None,
+        scope: SearchScope | None = None,
         top_k: int = 8,
     ) -> list[ChunkHit]:
         self._ensure_loaded()
@@ -121,8 +136,8 @@ class FileVectorRepository:
 
         scores = np.asarray(self._bm25.scores(query), dtype=np.float32)
 
-        if policy_id is not None:
-            mask = np.array([c.get("policy_id") == policy_id for c in self._chunks], dtype=bool)
+        if _scope_key(scope) is not None:
+            mask = np.array([_matches(c, scope) for c in self._chunks], dtype=bool)
             if not mask.any():
                 return []
             scores = np.where(mask, scores, -np.inf)
@@ -201,7 +216,7 @@ class FileVectorRepository:
         logger.info("로컬 벡터 인덱스 로드 완료: 청크 %d개", len(chunks))
 
     # CLI(scripts/run_pipeline.py)로 만든 청크에는 스코프 필드가 없다.
-    # 로컬 개발에서 policy_id 필터를 그대로 시험할 수 있도록 문서 stem을 합성 식별자로 채운다.
+    # 로컬 개발에서 스코프 필터를 그대로 시험할 수 있도록 문서 stem을 합성 식별자로 채운다.
     # API 경로로 들어온 청크는 이미 실제 값을 갖고 있으므로 건드리지 않는다.
     @staticmethod
     def _with_local_scope(chunk: dict, stem: str) -> dict:
@@ -212,6 +227,7 @@ class FileVectorRepository:
             "user_id": chunk.get("user_id") or f"local-user-{stem}",
             "trip_id": chunk.get("trip_id") or f"local-trip-{stem}",
             "policy_id": chunk.get("policy_id") or stem,
+            "document_id": chunk.get("document_id") or stem,
             "document_id": chunk.get("document_id") or stem,
         }
 

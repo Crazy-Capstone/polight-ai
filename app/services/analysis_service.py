@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -5,13 +6,23 @@ import httpx
 
 from app.clients import spring_client
 from app.clients.spring_client import SpringCallbackError
+from app.core.config import get_settings
 from app.repositories import VectorRepository, get_vector_repository
 from app.repositories.base import ChunkScope
-from app.schemas.analysis import AnalysisCompleteCallback, AnalysisFailCallback, CoverageItemPayload
-from app.schemas.analysis import AnalysisStartRequest
+from app.schemas.analysis import (
+    AnalysisCompleteCallback,
+    AnalysisFailCallback,
+    AnalysisStartRequest,
+)
+from app.services.callback_mapper import to_payload
 from app.services.chunking_service import parse_and_chunk
 from app.services.coverage_extractor import extract_all
+from app.services.embedding_providers import get_provider
 from app.services.embedding_service import embed_chunks
+
+# policy_chunks.embedding이 vector(1536)이고, 우리가 쓰는 upstage-1536도 1536이다.
+# provider.dimensions가 비어 있는(축소하지 않는) 벤더를 쓸 때의 기본값.
+DEFAULT_EMBEDDING_DIMENSION = 1536
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +43,18 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
     return pdf_path
 
 
-# 추출된 보장 항목을 현재 확정된 콜백 스키마로 줄여 담는다.
+# 화면에 노출되는 요약 문구.
 #
-# CoverageItem은 DDL의 자식 테이블(세부항목·세부한도·청구서류·면책조건)까지 담고 있지만,
-# 합의된 콜백 필드는 아직 4개뿐이라 여기서 잘라낸다.
-# 콜백 확장이 합의되면 이 함수가 전체를 그대로 싣도록 바뀐다.
-def _to_callback_payload(item, chunk_id_map: dict[str, str]) -> CoverageItemPayload:
-    # 저장 시 생성한 policy_chunks.id(UUID)로 바꿔야 Spring이 FK로 연결할 수 있다.
-    # 매핑이 없으면(파일 저장소 등) 원래 chunk_id를 그대로 둔다.
-    source_ids = [chunk_id_map.get(s.chunk_id, s.chunk_id) for s in item.sources]
+# analysis_results.summary는 현재 프론트에 보이는 유일한 분석 텍스트다.
+# "청크 268개" 같은 내부 수치를 쓰면 사용자에게 의미가 없으므로 담보 이름을 넣는다.
+def _build_summary(items: list) -> str:
+    if not items:
+        return "약관에서 보장 항목을 찾지 못했습니다. 약관 형식을 확인해 주세요."
 
-    return CoverageItemPayload(
-        title=item.title,
-        coverageStatus=item.coverage_status,
-        limitAmount=item.limit_amount,
-        sourceChunkIds=source_ids,
-    )
+    names = ", ".join(item.title for item in items[:3])
+    if len(items) > 3:
+        names += f" 외 {len(items) - 3}건"
+    return f"보장 항목 {len(items)}개를 확인했습니다: {names}"
 
 
 # 청크를 그대로 뒤집어 보내던 방식을 카테고리 기반 추출로 교체했다.
@@ -68,10 +75,23 @@ def _safe_notify_complete(
     for warning in warnings:
         logger.warning("보장항목 추출 경고: %s", warning)
 
+    payloads = [to_payload(item, chunk_id_map or {}) for item in items]
+
+    settings = get_settings()
+    provider = get_provider(settings.embedding_provider)
     payload = AnalysisCompleteCallback(
         analysisResultId=analysis_result_id,
-        summary=f"보장 항목 {len(items)}개 추출 완료 (청크 {len(chunks)}개)",
-        coverageItems=[_to_callback_payload(item, chunk_id_map or {}) for item in items],
+        summary=_build_summary(items),
+        coverageItems=payloads,
+        # analysis_results에 자리가 있는데 비어 있던 컬럼들.
+        # 어떤 모델로 만든 임베딩인지 남겨두지 않으면, 모델을 바꿨을 때
+        # 어느 문서를 재색인해야 하는지 알 수 없다.
+        embeddingModel=provider.doc_model,
+        embeddingDimension=provider.dimensions or DEFAULT_EMBEDDING_DIMENSION,
+        # 디버깅·재처리용 원본. Spring이 파싱하지 않고 TEXT로 보관한다.
+        rawResultJson=json.dumps(
+            [p.model_dump(by_alias=True) for p in payloads], ensure_ascii=False
+        ),
     )
     try:
         spring_client.notify_complete(payload)
@@ -103,8 +123,8 @@ def process_analysis(
     scope = ChunkScope(
         user_id=request.user_id,
         trip_id=request.trip_id,
-        policy_id=request.policy_id,
         document_id=request.document_id,
+        policy_id=request.policy_id,
     )
 
     try:
