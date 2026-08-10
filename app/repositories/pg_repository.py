@@ -1,9 +1,11 @@
 import logging
+import threading
 from contextlib import contextmanager
 
 import numpy as np
 import psycopg2
 from pgvector.psycopg2 import register_vector
+from psycopg2 import pool
 from psycopg2.extras import execute_values, register_uuid
 
 # psycopg2는 uuid.UUID를 기본으로 어댑트하지 못한다("can't adapt type 'UUID'").
@@ -120,22 +122,92 @@ def _scope_condition(scope: SearchScope | None, prefix: str) -> tuple[str, dict]
 # FileVectorRepository와 같은 인터페이스를 구현하므로, 이 클래스를 쓰도록 바꿔도
 # rag_service와 라우터는 수정할 필요가 없다.
 class PgVectorRepository:
-    def __init__(self, dsn: str) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        minconn: int = 1,
+        maxconn: int = 10,
+        acquire_timeout: float = 10.0,
+    ) -> None:
         self._dsn = dsn
+        self._minconn = minconn
+        self._maxconn = maxconn
+        self._pool: pool.ThreadedConnectionPool | None = None
+        # 풀 생성은 여러 요청이 동시에 들어와도 한 번만 일어나야 한다
+        self._lock = threading.Lock()
+
+        # 동시 사용 수를 풀 크기로 제한한다.
+        #
+        # psycopg2의 풀은 연결이 다 나가 있으면 기다리지 않고 PoolError를 던진다.
+        # 그대로 두면 동시 요청이 풀 크기를 넘는 순간 사용자에게 500이 나가는데,
+        # 이건 매번 새 연결을 열던 이전 방식보다 나쁘다. 실측에서 12스레드로
+        # 30회를 던지자 바로 "connection pool exhausted"가 났다.
+        #
+        # 세마포어로 앞에서 막으면 초과분은 연결이 반납될 때까지 기다린다.
+        # 조금 느려지는 것이 실패하는 것보다 낫다.
+        self._slots = threading.Semaphore(maxconn)
+        self._acquire_timeout = acquire_timeout
+
+    # 연결 풀.
+    #
+    # 이전에는 질의마다 psycopg2.connect로 새 연결을 열었다. TCP 핸드셰이크와
+    # 인증에 매번 수십 밀리초가 들고, 동시 사용자가 늘면 RDS의 max_connections를
+    # 밀어붙인다. 하이브리드 검색은 한 질문에 연결을 3번(벡터·키워드·면책) 여니
+    # 부담이 그만큼 곱해진다.
+    #
+    # ThreadedConnectionPool을 쓰는 이유는 FastAPI가 동기 엔드포인트를 스레드풀에서
+    # 돌리기 때문이다. SimpleConnectionPool은 스레드 안전하지 않다.
+    #
+    # 지연 생성한다. 기동 시점에 만들면 DB가 아직 안 떴을 때 앱이 뜨지 못하고,
+    # DATABASE_URL만 설정된 채 파일 저장소로 개발하는 경우도 막힌다.
+    def _get_pool(self) -> "pool.ThreadedConnectionPool":
+        if self._pool is None:
+            with self._lock:
+                if self._pool is None:
+                    self._pool = pool.ThreadedConnectionPool(
+                        self._minconn, self._maxconn, self._dsn
+                    )
+                    logger.info(
+                        "DB 연결 풀 생성 (최소 %d / 최대 %d)", self._minconn, self._maxconn
+                    )
+        return self._pool
 
     @contextmanager
     def _cursor(self, commit: bool = False):
-        connection = psycopg2.connect(self._dsn)
+        connection_pool = self._get_pool()
+
+        # 빈 자리가 날 때까지 기다린다. 무한정 기다리면 요청이 쌓여 서버가 멈춘
+        # 것처럼 보이므로 시간을 정해두고, 넘으면 원인을 알 수 있는 예외를 낸다.
+        if not self._slots.acquire(timeout=self._acquire_timeout):
+            raise TimeoutError(
+                f"DB 연결을 {self._acquire_timeout}초 안에 얻지 못했습니다. "
+                f"동시 요청이 풀 크기({self._maxconn})를 넘고 있습니다."
+            )
+
+        connection = connection_pool.getconn()
         # vector 타입은 확장이 정의한 것이라 연결마다 등록해야 한다.
-        # 등록하면 파이썬 리스트를 그대로 넣고 읽을 수 있다.
+        # 풀에서 재사용되는 연결에도 매번 등록해도 무해하다.
         register_vector(connection)
         try:
             with connection.cursor() as cursor:
                 yield cursor
             if commit:
                 connection.commit()
+        except Exception:
+            # 롤백하지 않고 풀에 되돌리면, 다음 사용자가 실패한 트랜잭션 상태의
+            # 연결을 받아 "current transaction is aborted"로 연쇄 실패한다.
+            connection.rollback()
+            raise
         finally:
-            connection.close()
+            connection_pool.putconn(connection)
+            self._slots.release()
+
+    def close(self) -> None:
+        """앱 종료 시 풀을 정리한다. 안 닫으면 DB 쪽에 유휴 연결이 남는다."""
+        if self._pool is not None:
+            self._pool.closeall()
+            self._pool = None
+            logger.info("DB 연결 풀 정리 완료")
 
     # ── 색인 ─────────────────────────────────────────────────
 

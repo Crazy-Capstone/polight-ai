@@ -1,9 +1,15 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
+from app.repositories import get_vector_repository
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -22,7 +28,23 @@ if settings.spring_base_url and not settings.internal_api_key:
         "openssl rand -base64 32 으로 생성해 Spring과 같은 값을 쓰십시오."
     )
 
+# 종료 시 DB 연결 풀을 정리한다.
+#
+# 안 닫으면 DB 쪽에 유휴 연결이 남는다. EC2를 재배포할 때마다 쌓이면
+# RDS의 max_connections를 밀어붙이게 된다.
+#
+# 파일 저장소를 쓰는 로컬 개발에서는 close()가 없으므로 확인 후 호출한다.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    repository = get_vector_repository()
+    if hasattr(repository, "close"):
+        repository.close()
+        logger.info("저장소 정리 완료")
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.app_name,
     description="Polight AI RAG 서버 - 여행자보험 약관 분석 및 질의응답 내부 API (Spring Boot 연동용)",
     version="0.1.0",
