@@ -6,6 +6,7 @@ from pathlib import Path
 from openai import OpenAI
 
 from app.core.config import get_settings
+from app.services.answer_providers import generate_json
 from app.schemas.coverage import CoverageItem
 
 logger = logging.getLogger(__name__)
@@ -135,21 +136,108 @@ def validate_against_source(item: CoverageItem, chunks: list[dict]) -> list[str]
 # 250페이지를 통째로 주면 느리고 불안정할 뿐 아니라, 결과가 약관 어디에서 나왔는지
 # 알 수 없어 coverage_item_sources(근거 연결)를 채울 수 없다.
 # 조각을 직접 넣으면 chunkId가 그대로 따라온다.
+# 한 번에 보낼 조각의 최대 글자 수.
+#
+# 실측에서 medical_expense가 48,276토큰이라 OpenAI의 분당 토큰 한도(30,000)를 넘겨
+# 통째로 실패했다. 가장 중요한 의료비 담보가 빠지는 상황이라 그냥 둘 수 없다.
+# 한국어는 대략 1.5자당 1토큰이므로 30,000자면 약 20,000토큰이고, 출력과
+# 시스템 프롬프트를 더해도 한도 안에 들어온다.
+MAX_CONTEXT_CHARS = 30_000
+
+
+def _split_by_budget(chunks: list[dict], budget: int = MAX_CONTEXT_CHARS) -> list[list[dict]]:
+    """조각을 글자 수 예산에 맞춰 나눈다. 조각 하나는 쪼개지 않는다."""
+    batches: list[list[dict]] = []
+    current: list[dict] = []
+    size = 0
+
+    for chunk in chunks:
+        length = len(chunk["text"]) + len(chunk.get("section_title") or "") + 100
+        if current and size + length > budget:
+            batches.append(current)
+            current, size = [], 0
+        current.append(chunk)
+        size += length
+
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _merge_items(items: list[CoverageItem]) -> CoverageItem:
+    """배치별 추출 결과를 담보 하나로 합친다.
+
+    목록형 필드는 이어붙이고 중복만 없앤다. 배치를 나눴다고 면책 조건이 줄면
+    나누는 의미가 없기 때문이다. 단일 값은 처음 채워진 것을 쓴다.
+    앞 배치가 비워둔 값을 뒤 배치가 채우는 경우를 살리기 위해서다.
+    """
+    base = items[0]
+
+    def first(attr):
+        return next((getattr(i, attr) for i in items if getattr(i, attr) is not None), None)
+
+    def merge(attr, key):
+        seen, merged = set(), []
+        for item in items:
+            for entry in getattr(item, attr):
+                marker = key(entry)
+                if marker not in seen:
+                    seen.add(marker)
+                    merged.append(entry)
+        return merged
+
+    base.limit_amount = first("limit_amount")
+    base.limit_label = first("limit_label")
+    base.limit_currency = first("limit_currency")
+    base.conditions = first("conditions")
+    base.detail_items = merge("detail_items", lambda e: e.title)
+    base.sub_limits = merge("sub_limits", lambda e: (e.label, e.value))
+    base.required_documents = merge("required_documents", lambda e: e.document_name)
+    base.exclusions = merge("exclusions", lambda e: e.title)
+    base.sources = merge("sources", lambda e: (e.chunk_id, e.quote_text))
+    return base
+
+
 def extract_coverage_item(
     category: str,
     display_name: str,
     chunks: list[dict],
     client: OpenAI | None = None,
     model: str | None = None,
+    provider: str | None = None,
 ) -> tuple[CoverageItem | None, list[str]]:
     if not chunks:
         return None, [f"{category}: 해당 조각이 없습니다"]
 
+    # 조각이 많으면 나눠 보내고 결과를 합친다. 나누지 않으면 큰 카테고리가
+    # 토큰 한도에 걸려 통째로 실패한다.
+    batches = _split_by_budget(chunks)
+    if len(batches) > 1:
+        logger.info("%s: 조각이 많아 %d개 배치로 나눕니다", category, len(batches))
+        items, warnings = [], []
+        for batch in batches:
+            item, batch_warnings = _extract_single(
+                category, display_name, batch, client, model, provider
+            )
+            if item:
+                items.append(item)
+            warnings.extend(batch_warnings)
+        if not items:
+            return None, warnings
+        return _merge_items(items), warnings
+
+    return _extract_single(category, display_name, chunks, client, model, provider)
+
+
+def _extract_single(
+    category: str,
+    display_name: str,
+    chunks: list[dict],
+    client: OpenAI | None = None,
+    model: str | None = None,
+    provider: str | None = None,
+) -> tuple[CoverageItem | None, list[str]]:
     settings = get_settings()
-    if client is None:
-        if not settings.openai_api_key:
-            raise ValueError(".env에 OPENAI_API_KEY가 설정되지 않았습니다.")
-        client = OpenAI(api_key=settings.openai_api_key)
 
     user_message = (
         f"[담보 카테고리]\n{category} ({display_name})\n\n"
@@ -157,17 +245,27 @@ def extract_coverage_item(
         f"[출력 형식]\n{OUTPUT_SCHEMA}"
     )
 
-    response = client.chat.completions.create(
-        model=model or settings.extraction_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0,
-    )
+    # client를 직접 넘기면 옛 경로(OpenAI 고정)를 쓰고, 없으면 벤더 레지스트리를 탄다.
+    # 테스트가 호출을 가로챌 수 있도록 남겨둔 통로다.
+    if client is not None:
+        response = client.chat.completions.create(
+            model=model or settings.extraction_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        raw = response.choices[0].message.content or "{}"
+    else:
+        # provider를 안 넘기면 추출 전용 기본값을 쓴다. generate_json의 기본값은
+        # answer_provider(답변용)라, 그대로 두면 추출이 답변 모델로 돌아간다.
+        raw, _ = generate_json(
+            SYSTEM_PROMPT, user_message,
+            provider_name=provider or settings.extraction_provider,
+        )
 
-    raw = response.choices[0].message.content or "{}"
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
@@ -196,6 +294,7 @@ def extract_all(
     chunks: list[dict],
     client: OpenAI | None = None,
     model: str | None = None,
+    provider: str | None = None,
 ) -> tuple[list[CoverageItem], list[str]]:
     categories = load_categories()
     items: list[CoverageItem] = []
@@ -210,7 +309,8 @@ def extract_all(
 
         try:
             item, item_warnings = extract_coverage_item(
-                category, meta["display_name"], matched, client=client, model=model
+                category, meta["display_name"], matched,
+                client=client, model=model, provider=provider
             )
         except Exception as e:
             warnings.append(f"{category}: 추출 실패 ({e})")
