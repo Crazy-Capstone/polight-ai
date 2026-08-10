@@ -3,7 +3,7 @@ import logging
 from openai import OpenAI
 
 from app.core.config import get_settings
-from app.repositories.base import ChunkHit, VectorRepository
+from app.repositories.base import ChunkHit, SearchScope, VectorRepository
 from app.schemas.rag import RagQueryRequest, RagQueryResponse, SourceChunk
 from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
@@ -30,11 +30,11 @@ def hybrid_search(
     repository: VectorRepository,
     query: str,
     query_vector: list[float],
-    policy_id: str | None,
+    scope: SearchScope | None,
     top_k: int,
 ) -> list[ChunkHit]:
-    dense = repository.search(query_vector, policy_id=policy_id, top_k=top_k)
-    sparse = repository.search_text(query, policy_id=policy_id, top_k=top_k)
+    dense = repository.search(query_vector, scope=scope, top_k=top_k)
+    sparse = repository.search_text(query, scope=scope, top_k=top_k)
 
     if not sparse:
         return dense
@@ -137,8 +137,9 @@ def _call_llm(user_message: str, client: OpenAI | None = None, model: str | None
 
 # POST /internal/rag/query 진입점 (파이프라인 B의 ⑤~⑩).
 #
-# contract_info(가입 담보)와 history(대화 맥락)는 아직 RagQueryRequest에 필드가 없어
-# 항상 None으로 전달된다. Spring과 스키마 합의가 끝나면 값만 채우면 된다.
+# history는 요청에서 받는다. Spring이 chat_messages에서 최근 3턴을 잘라 실어 보낸다.
+# contract_info(가입 담보)는 아직 자리만 열려 있다. 증권 정보를 수집하는 화면이 없어
+# policies 테이블에 데이터가 없기 때문이며, MVP 범위 밖으로 합의됐다.
 def answer_question(
     request: RagQueryRequest,
     repository: VectorRepository,
@@ -156,7 +157,7 @@ def answer_question(
         repository,
         request.question,
         query_vector,
-        policy_id=request.policy_id,
+        scope=SearchScope(document_id=request.document_id, trip_id=request.trip_id),
         top_k=settings.top_k * settings.mmr_candidate_multiplier,
     )
 
@@ -165,11 +166,16 @@ def answer_question(
 
     hits = mmr_select(candidates, top_k=settings.top_k, lambda_=settings.mmr_lambda)
     hits = attach_related_chunks(hits, repository)
+    # 인자로 받은 history가 있으면 그것을 쓰고(테스트용), 없으면 요청에 실린 것을 쓴다
+    turns = history if history is not None else [
+        {"role": "user" if t.sender == "USER" else "assistant", "content": t.content}
+        for t in request.history
+    ]
     user_message = build_user_message(
         request.question,
         hits,
         contract_info=contract_info,
-        history=history,
+        history=turns,
     )
     answer = _call_llm(user_message, client=client)
 

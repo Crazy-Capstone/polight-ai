@@ -103,8 +103,8 @@ def process_analysis(
     scope = ChunkScope(
         user_id=request.user_id,
         trip_id=request.trip_id,
-        policy_id=request.policy_id,
         document_id=request.document_id,
+        policy_id=request.policy_id,
     )
 
     try:

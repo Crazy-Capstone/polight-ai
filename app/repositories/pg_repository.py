@@ -10,7 +10,7 @@ from psycopg2.extras import execute_values, register_uuid
 # 모듈 전역 등록이라 한 번만 호출하면 된다.
 register_uuid()
 
-from app.repositories.base import ChunkHit, ChunkScope
+from app.repositories.base import ChunkHit, ChunkScope, SearchScope
 from app.repositories.pg_mapper import COLUMNS, to_rows
 from app.services.bm25 import BM25Index
 
@@ -95,6 +95,22 @@ WHERE c.id = ANY(%(ids)s::uuid[])
 """
 
 
+# 검색 범위를 SQL 조건으로 바꾼다.
+#
+# policy_id로 필터하지 않는다. 백엔드에 policies 행을 만드는 코드가 없어 이 컬럼이
+# 항상 null이고, SQL에서 "= NULL"은 아무 행과도 일치하지 않는다. 로컬에서 직접 값을
+# 채워 테스트했기 때문에 오래 못 보고 지나간 문제다. document_id는 NOT NULL이라
+# 분석 요청에 항상 실려 오므로 이걸 스코프 키로 쓴다.
+def _scope_condition(scope: SearchScope | None, prefix: str) -> tuple[str, dict]:
+    if scope is None or scope.is_empty():
+        return "", {}
+
+    # document_id가 있으면 그 약관만 본다. 없으면 여행 단위로 넓힌다.
+    if scope.document_id:
+        return f"{prefix} c.document_id = %(document_id)s", {"document_id": scope.document_id}
+    return f"{prefix} c.trip_id = %(trip_id)s", {"trip_id": scope.trip_id}
+
+
 # pgvector 기반 저장소.
 #
 # FileVectorRepository와 같은 인터페이스를 구현하므로, 이 클래스를 쓰도록 바꿔도
@@ -167,14 +183,14 @@ class PgVectorRepository:
     def search(
         self,
         query_vector: list[float],
-        policy_id: str | None = None,
+        scope: SearchScope | None = None,
         top_k: int = 8,
     ) -> list[ChunkHit]:
-        scope = "AND c.policy_id = %(policy_id)s" if policy_id else ""
-        sql = SEARCH_SQL.format(scope=scope)
+        condition, params = _scope_condition(scope, prefix="AND")
+        sql = SEARCH_SQL.format(scope=condition)
 
         with self._cursor() as cursor:
-            cursor.execute(sql, {"vector": query_vector, "policy_id": policy_id, "top_k": top_k})
+            cursor.execute(sql, {"vector": query_vector, "top_k": top_k, **params})
             rows = cursor.fetchall()
 
         return [self._to_hit(row) for row in rows]
@@ -188,14 +204,14 @@ class PgVectorRepository:
     def search_text(
         self,
         query: str,
-        policy_id: str | None = None,
+        scope: SearchScope | None = None,
         top_k: int = 8,
     ) -> list[ChunkHit]:
-        scope = "WHERE c.policy_id = %(policy_id)s" if policy_id else ""
-        sql = TEXT_SQL.format(scope=scope)
+        condition, params = _scope_condition(scope, prefix="WHERE")
+        sql = TEXT_SQL.format(scope=condition)
 
         with self._cursor() as cursor:
-            cursor.execute(sql, {"policy_id": policy_id})
+            cursor.execute(sql, params)
             rows = cursor.fetchall()
 
         if not rows:
