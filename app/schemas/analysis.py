@@ -1,5 +1,7 @@
 from typing import Literal
 
+from pydantic import AliasChoices, Field
+
 from app.schemas.base import CamelModel
 
 
@@ -10,10 +12,17 @@ from app.schemas.base import CamelModel
 class AnalysisStartRequest(CamelModel):
     analysis_result_id: str
     document_id: str
-    download_url: str
     user_id: str
     trip_id: str
     policy_id: str | None = None
+
+    # downloadUrl과 fileUrl을 둘 다 받는다.
+    #
+    # 백엔드 답변서의 요청 예시는 fileUrl인데 우리 스키마는 downloadUrl이었다.
+    # 어느 한쪽으로 맞추자고 논의하는 대신 둘 다 받으면, 그쪽이 어느 이름으로
+    # 보내든 동작하고 나중에 바꿔도 깨지지 않는다. 이름 하나 때문에 첫 요청이
+    # 422로 튕기고 원인을 찾는 시간이 아깝다.
+    download_url: str = Field(validation_alias=AliasChoices("downloadUrl", "fileUrl", "download_url"))
 
 
 # ── 자식 배열 ────────────────────────────────────────────────

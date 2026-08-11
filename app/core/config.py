@@ -106,6 +106,13 @@ class Settings(BaseSettings):
     # Spring 콜백 대상 (완료/실패 알림). 아직 미확정이면 비워둔 채로 로컬 테스트.
     spring_base_url: str | None = None
 
+    # 콜백을 보낼 경로. Spring 쪽에 아직 /internal 엔드포인트가 없어 우리가 정한 값이라,
+    # 그쪽이 다른 경로로 만들면 404가 나고 상태가 PROCESSING에 고착된다.
+    # 설정으로 빼두면 이미지를 다시 만들지 않고 환경변수만 바꿔 맞출 수 있다.
+    # {id} 자리에 analysis_result_id가 들어간다.
+    callback_complete_path: str = "/internal/analysis-results/{id}/complete"
+    callback_fail_path: str = "/internal/analysis-results/{id}/fail"
+
     # Spring과 공유하는 내부 API 시크릿. 양방향으로 같은 키를 쓴다.
     #   Spring -> Python  요청 헤더를 검증
     #   Python -> Spring  콜백 헤더에 실어 보냄

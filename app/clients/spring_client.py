@@ -80,10 +80,10 @@ def _post(path: str, payload: dict) -> None:
 
 
 def notify_complete(callback: AnalysisCompleteCallback) -> None:
-    path = f"/internal/analysis-results/{callback.analysis_result_id}/complete"
+    path = get_settings().callback_complete_path.format(id=callback.analysis_result_id)
     _post(path, callback.model_dump(by_alias=True))
 
 
 def notify_fail(callback: AnalysisFailCallback) -> None:
-    path = f"/internal/analysis-results/{callback.analysis_result_id}/fail"
+    path = get_settings().callback_fail_path.format(id=callback.analysis_result_id)
     _post(path, callback.model_dump(by_alias=True))
