@@ -34,14 +34,31 @@ SYSTEM_PROMPT = """당신은 여행자보험 약관에서 보장 항목 정보�
 4. sources에는 실제로 근거가 된 조각의 chunkId만 넣으십시오.
    sourceRole은 보장 근거면 COVERAGE, 면책 근거면 EXCLUSION,
    한도 근거면 LIMIT, 청구서류 근거면 DOCUMENT입니다.
-5. 반드시 지정된 JSON 형식 하나만 출력하십시오. 설명을 덧붙이지 마십시오."""
+5. 반드시 지정된 JSON 형식 하나만 출력하십시오. 설명을 덧붙이지 마십시오.
+
+coverageStatus는 아래 기준으로 정하십시오. 조각에 붙은 [보장]/[면책] 라벨이 아니라
+조각의 실제 내용을 읽고 판단하십시오. 라벨이 틀린 경우가 있습니다.
+
+- COVERED    이 담보를 보상하는 조항이 있습니다.
+- PARTIAL    보상하지만 범위가 제한적입니다. 일부 항목만 보상하거나
+             조건을 충족해야만 보상하는 경우입니다.
+- EXCLUDED   약관이 이 담보를 명시적으로 보상하지 않는다고 밝혔습니다.
+             "보상하지 않습니다", "보상하여 드리지 않습니다"처럼 배제를 선언한
+             조항이 있고, 이를 보상하는 조항은 없는 경우입니다.
+- NOT_COVERED 관련 조항이 조각에 아예 없습니다. 보상한다는 말도, 보상하지
+             않는다는 말도 없는 경우입니다.
+- UNKNOWN    조항은 있으나 표현이 모호해 보상 여부를 단정할 수 없습니다.
+
+EXCLUDED와 NOT_COVERED를 구분하는 것이 중요합니다. 전자는 사용자에게
+"이 약관은 그것을 보상하지 않습니다"라고 알려줄 수 있지만, 후자는
+"관련 내용을 찾지 못했습니다"까지만 말할 수 있습니다."""
 
 OUTPUT_SCHEMA = """{
   "title": "담보 이름 (예: 해외 상해 의료비)",
   "subtitle": "한 줄 요약 또는 null",
   "limitLabel": "화면 표시용 한도 문구 (예: 최대 1,000만원) 또는 null",
   "isCovered": true,
-  "coverageStatus": "COVERED | NOT_COVERED | PARTIAL | UNKNOWN",
+  "coverageStatus": "COVERED | PARTIAL | EXCLUDED | NOT_COVERED | UNKNOWN",
   "limitAmount": 10000000,
   "limitCurrency": "KRW",
   "conditions": "보장 조건 요약 또는 null",
