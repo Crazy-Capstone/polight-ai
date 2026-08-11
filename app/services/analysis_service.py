@@ -1,11 +1,13 @@
 import json
 import logging
+import time
 from pathlib import Path
 
 import httpx
 
 from app.clients import spring_client
 from app.clients.spring_client import SpringCallbackError
+from app.core.auth import HEADER_NAME
 from app.core.config import get_settings
 from app.repositories import VectorRepository, get_vector_repository
 from app.repositories.base import ChunkScope
@@ -30,17 +32,48 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_PDF_DIR = PROJECT_ROOT / "data" / "raw_pdfs"
 
 
+# 약관 PDF를 받아온다.
+#
+# 주소가 어떤 형태로 올지 확정되지 않았다. S3 presigned URL이면 인증이 필요 없고,
+# Spring이 직접 파일을 내려주는 엔드포인트면 내부 API 키가 필요하다.
+# 어느 쪽인지 물어보고 기다리는 대신, 키가 있으면 항상 헤더에 실어 보낸다.
+# presigned URL은 서명에 포함되지 않은 헤더를 무시하므로 있어도 무해하다.
+#
+# 재시도를 두는 이유는 이 단계 실패가 곧 분석 전체 실패이기 때문이다.
+# 일시적인 네트워크 문제로 약관 하나를 통째로 날리는 것은 아깝다.
+DOWNLOAD_MAX_ATTEMPTS = 3
+
+
 def _download_pdf(download_url: str, document_id: str) -> Path:
     RAW_PDF_DIR.mkdir(parents=True, exist_ok=True)
     pdf_path = RAW_PDF_DIR / f"{document_id}.pdf"
 
-    with httpx.stream("GET", download_url, timeout=30.0) as response:
-        response.raise_for_status()
-        with pdf_path.open("wb") as f:
-            for data in response.iter_bytes():
-                f.write(data)
+    settings = get_settings()
+    headers = (
+        {HEADER_NAME: settings.internal_api_key} if settings.internal_api_key else {}
+    )
 
-    return pdf_path
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+        try:
+            with httpx.stream(
+                "GET", download_url, headers=headers, timeout=60.0, follow_redirects=True
+            ) as response:
+                response.raise_for_status()
+                with pdf_path.open("wb") as f:
+                    for data in response.iter_bytes():
+                        f.write(data)
+            return pdf_path
+        except httpx.HTTPError as e:
+            last_error = e
+            # 4xx는 다시 받아도 같다. 주소가 틀렸거나 만료됐거나 권한이 없다.
+            if isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500:
+                break
+            if attempt < DOWNLOAD_MAX_ATTEMPTS:
+                logger.warning("PDF 내려받기 실패 (%d/%d): %s", attempt, DOWNLOAD_MAX_ATTEMPTS, e)
+                time.sleep(2.0 * attempt)
+
+    raise RuntimeError(f"약관 PDF를 내려받지 못했습니다 ({download_url}): {last_error}")
 
 
 # 화면에 노출되는 요약 문구.

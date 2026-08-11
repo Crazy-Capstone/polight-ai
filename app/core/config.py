@@ -95,8 +95,32 @@ class Settings(BaseSettings):
     # DB 스키마 확정 전까지는 비워둠. 내일 연결 시 값 채우면 repository 구현체가 사용.
     database_url: str | None = None
 
+    # DB 연결 풀 크기.
+    #
+    # 하이브리드 검색은 한 질문에 연결을 3번 쓴다(벡터·키워드·면책 조회).
+    # 동시 대화 5건을 기준으로 여유를 둬 10으로 잡았다. RDS의 max_connections를
+    # 넘기면 연결 자체가 거부되므로 무작정 키우면 안 된다.
+    db_pool_min: int = 1
+    db_pool_max: int = 10
+
     # Spring 콜백 대상 (완료/실패 알림). 아직 미확정이면 비워둔 채로 로컬 테스트.
     spring_base_url: str | None = None
+
+    # 콜백을 보낼 경로. Spring 쪽에 아직 /internal 엔드포인트가 없어 우리가 정한 값이라,
+    # 그쪽이 다른 경로로 만들면 404가 나고 상태가 PROCESSING에 고착된다.
+    # 설정으로 빼두면 이미지를 다시 만들지 않고 환경변수만 바꿔 맞출 수 있다.
+    # {id} 자리에 analysis_result_id가 들어간다.
+    callback_complete_path: str = "/internal/analysis-results/{id}/complete"
+    callback_fail_path: str = "/internal/analysis-results/{id}/fail"
+
+    # Spring과 공유하는 내부 API 시크릿. 양방향으로 같은 키를 쓴다.
+    #   Spring -> Python  요청 헤더를 검증
+    #   Python -> Spring  콜백 헤더에 실어 보냄
+    #
+    # 비어 있으면 인증 없이 통과시킨다. 로컬 개발 편의를 위한 것이고,
+    # 배포 환경(SPRING_BASE_URL이 있는 상태)에서는 기동을 막는다.
+    # 생성: openssl rand -base64 32
+    internal_api_key: str = ""
 
     log_level: str = "INFO"
 
