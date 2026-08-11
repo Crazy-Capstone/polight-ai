@@ -17,6 +17,7 @@
 # ── policy_chunks.clause_type ────────────────────────────────
 # GENERAL | COVERAGE | EXCLUSION | CONDITION | LIMIT | DEFINITION | PROCEDURE | REQUIRED_DOCUMENT
 CLAUSE_TYPE = {
+    "general": "GENERAL",
     "included": "COVERAGE",
     "excluded": "EXCLUSION",
     "procedure": "PROCEDURE",

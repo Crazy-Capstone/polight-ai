@@ -33,6 +33,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import get_settings  # noqa: E402
 from app.repositories.base import ChunkHit  # noqa: E402
+from app.repositories.base import SearchScope  # noqa: E402
 from app.repositories.file_repository import FileVectorRepository  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
 from app.services.rag_service import hybrid_search  # noqa: E402
@@ -128,9 +129,9 @@ def evaluate(
         # 임베딩 모델을 비교할 때는 --no-hybrid로 BM25를 꺼야 한다.
         # 켜두면 키워드 점수가 섞여 모델 간 차이가 희석된다.
         if use_hybrid:
-            candidates = hybrid_search(repository, item["question"], vector, policy_id, pool)
+            candidates = hybrid_search(repository, item["question"], vector, SearchScope(document_id=policy_id), pool)
         else:
-            candidates = repository.search(vector, policy_id=policy_id, top_k=pool)
+            candidates = repository.search(vector, scope=SearchScope(document_id=policy_id), top_k=pool)
 
         hits = mmr_select(candidates, top_k=top_k, lambda_=lambda_) if use_mmr else candidates
 
