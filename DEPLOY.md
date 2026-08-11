@@ -1,23 +1,52 @@
 # 배포 안내
 
-AI 서버는 Spring과 **분리된 별도 EC2**에 올린다. 같은 서버에 얹으면 약관 분석
-(파싱·임베딩·추출)이 도는 동안 CPU 경합으로 Spring API 응답까지 느려진다.
+**Spring과 같은 EC2에 올리되, compose는 따로 둔다.**
 
 ```
-[Spring EC2] ──(8000)──> [AI EC2] ──(5432)──> [RDS]
-      ^                      │
-      └────(콜백)────────────┘
+[ EC2 ]
+  ├─ polight-server  (Spring)  ─┐
+  ├─ polight-ai      (우리)     ├─ docker network: polight-net
+  └─ 각자 다른 compose 프로젝트  ─┘
+                  │
+                  └──> RDS (같은 VPC 안이라 그대로 붙는다)
 ```
+
+## 왜 같은 호스트인가
+
+처음에는 CPU 경합을 우려해 별도 EC2를 계획했으나, **실측해보니 근거가 없었다.**
+
+```
+분석 1건(182초) 동안의 우리 프로세스
+  CPU     평균 0.1%  최대 6.5%  (14코어 기준)
+  메모리   최대 189MB
+```
+
+182초 중 대부분이 Upstage·OpenAI **API 응답 대기**라 실제 연산이 거의 없다.
+t3.medium(2 vCPU)으로 환산해도 평균 1% 미만이라 Spring이 느려질 일이 없다.
+
+같은 호스트를 쓰면 **RDS와 같은 VPC 안이라 DB에 그대로 붙고**, 포트를 밖으로
+열 필요도 없다. VPC ID를 받아 별도 EC2를 맞추는 작업이 통째로 사라진다.
+
+## 왜 compose는 따로인가
+
+같은 compose에 넣으면 **Spring을 배포할 때마다 우리 컨테이너도 재시작된다.**
+
+분석은 3~4분간 프로세스 안에서 돈다(`BackgroundTasks`). 그 사이 재시작되면
+작업이 통째로 날아가고, 콜백을 못 보내 `analysis_results`가 `PROCESSING`에
+고착된다. **에러도 로그도 남지 않아 알아채기 어렵다.**
+
+`docker network`만 공유하면 컨테이너끼리 이름으로 통신하면서 배포는 독립적이다.
 
 ## 백엔드에서 받아야 하는 것
 
 | 항목 | 왜 필요한가 |
 | --- | --- |
-| **VPC ID / 서브넷** | RDS와 같은 VPC에 EC2를 만들어야 DB에 붙는다. 다른 VPC에 만들면 인스턴스를 다시 만들어야 하므로 **생성 전에** 받아야 한다 |
-| RDS 보안그룹 | AI EC2에서 오는 5432 인바운드 허용 |
-| `rag_service` 계정 + RDS 엔드포인트 | `DATABASE_URL`에 넣는다 |
-| Spring 보안그룹 | AI EC2 → Spring (콜백용) |
-| `INTERNAL_API_KEY` | Spring과 같은 값. 문서·커밋에 넣지 않고 별도 채널로 받는다 |
+| **콜백 경로** | 우리가 정한 경로로 만들어 뒀다. 다르면 알려주면 환경변수로 맞춘다 |
+| `INTERNAL_API_KEY` | Spring과 같은 값. 문서·커밋에 넣지 않고 별도 채널로 주고받는다 |
+| `SPRING_BASE_URL` | 같은 네트워크면 `http://polight-server:8080` 형태 |
+| DB 접속 정보 | 이미 그 서버에서 RDS에 붙고 있으므로 같은 값을 쓰면 된다 |
+
+**VPC ID와 RDS 보안그룹은 더 이상 필요 없다.** 같은 호스트를 쓰기 때문이다.
 
 ## 환경변수
 
@@ -44,23 +73,54 @@ LOG_LEVEL=INFO
 
 ## 실행
 
+**최초 1회 — 공용 네트워크를 만든다**
+
 ```bash
-docker build -t polight-ai .
-docker run -d --name polight-ai -p 8000:8000 --env-file .env --restart unless-stopped polight-ai
-curl http://localhost:8000/health
+docker network create polight-net
 ```
 
-## 보안그룹
+**Spring 쪽 compose에 네트워크를 붙인다** (백엔드가 한 번만)
 
-| 방향 | 포트 | 출처/대상 |
-| --- | --- | --- |
-| 인바운드 | 8000 | **Spring EC2에서만.** 외부 공개하지 않는다 |
-| 아웃바운드 | 5432 | RDS |
-| 아웃바운드 | 8080 | Spring (콜백) |
-| 아웃바운드 | 443 | OpenAI / Upstage API |
+```yaml
+services:
+  spring:
+    networks: [polight-net]
+networks:
+  polight-net:
+    external: true
+```
 
-보안그룹으로 8000을 좁히는 것과 `X-Internal-Api-Key` 검증이 **2중 방어**를 만든다.
-어느 한쪽만으로도 막히지만, 보안그룹은 잘못 열기 쉽고 키는 유출될 수 있다.
+**우리 배포**
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Spring을 배포해도 이 컨테이너는 건드려지지 않는다. 반대도 마찬가지다.
+
+## 서로 부르는 주소
+
+컨테이너 이름으로 통신한다. IP를 알 필요가 없다.
+
+```
+Spring -> AI      http://polight-ai:8000/internal/rag/query
+AI -> Spring      SPRING_BASE_URL=http://polight-server:8080
+```
+
+## 포트를 열지 않는다
+
+`ports`가 아니라 `expose`를 쓴다. 같은 네트워크의 컨테이너만 접근하면 되므로
+호스트에도, 외부에도 노출할 이유가 없다. **보안그룹으로 막는 것보다 아예 열지
+않는 편이 확실하다.**
+
+검증한 내용이다.
+
+```
+호스트에서 localhost:8000        연결 안 됨
+같은 네트워크의 다른 컨테이너      http://polight-ai:8000/health -> 200
+키 없이 /internal                401
+맞는 키                          200
+```
 
 ## 엔드포인트
 
