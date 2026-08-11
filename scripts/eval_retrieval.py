@@ -34,9 +34,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.core.config import get_settings  # noqa: E402
 from app.repositories.base import ChunkHit  # noqa: E402
 from app.repositories.base import SearchScope  # noqa: E402
-from app.repositories.file_repository import FileVectorRepository  # noqa: E402
+from app.repositories.file_repository import FileVectorRepository, _matches  # noqa: E402
 from app.services.embedding_service import embed_query  # noqa: E402
 from app.services.rag_service import hybrid_search  # noqa: E402
+from app.services.query_rewriter import rewrite
 from app.services.reranker import mmr_select  # noqa: E402
 
 DEFAULT_QUESTIONS = PROJECT_ROOT / "data" / "eval" / "questions.json"
@@ -104,6 +105,40 @@ def find_chunks(chunks_dir: Path, policy_id: str, keyword: str) -> None:
         print("\n위 결과에서 page와 본문 문구를 골라 questions.json의 gold에 적으세요.")
 
 
+# gold 문구와 일치하는 청크가 몇 개인지 센다.
+#
+# 이 값이 문항 난이도다. 같은 표준 면책 조항이 여러 특약에 반복되면 정답 청크가
+# 10개가 되고, 그중 아무거나 찾아도 정답이라 훨씬 쉽다. 난이도를 모르고
+# 하나의 Recall로 합치면 실제 능력을 과대평가한다.
+_density_cache: dict[str, int] = {}
+
+
+def gold_density(repository: FileVectorRepository, gold: list[dict], policy_id: str) -> int:
+    """gold 문구와 일치하는 청크가 검색 범위 안에 몇 개 있는지 센다.
+
+    반드시 policy_id로 범위를 좁힌다. 저장소는 약관 7건을 모두 들고 있는데,
+    검색은 한 건 안에서만 돈다. 전체에서 세면 표준 면책 조항이 7배로 부풀어
+    난이도를 완전히 잘못 읽는다(임신·출산 면책: 실제 10건 -> 전체 69건).
+    """
+    key = f"{policy_id}|" + "|".join(sorted(g["contains"] for g in gold))
+    if key not in _density_cache:
+        repository._ensure_loaded()
+        needles = [normalize(g["contains"]) for g in gold]
+        scope = SearchScope(document_id=policy_id)
+        _density_cache[key] = sum(
+            1
+            for chunk in repository._chunks
+            if _matches(chunk, scope) and any(n in normalize(chunk["text"]) for n in needles)
+        )
+    return _density_cache[key]
+
+
+def _report(label: str, group: list[tuple[dict, int | None]], top_k: int) -> None:
+    hit = sum(1 for _, r in group if r is not None and r <= top_k)
+    mrr = sum(1 / r for _, r in group if r) / len(group)
+    print(f"  {label:22} Recall@{top_k} {hit}/{len(group)} ({hit / len(group) * 100:3.0f}%)  MRR {mrr:.4f}")
+
+
 # ── 평가 ─────────────────────────────────────────────────────
 
 
@@ -119,17 +154,23 @@ def evaluate(
 ) -> None:
     ranks: list[int | None] = []
 
-    print(f'{"ID":5} {"유형":10} {"순위":>4}  질문')
-    print("-" * 78)
+    print(f'{"ID":5} {"유형":10} {"gold":>5} {"순위":>4}  질문')
+    print("-" * 84)
 
     for item in questions:
-        vector = embed_query(item["question"])
+        # 멀티턴 문항은 이력을 참고해 질문을 독립적으로 바꾼 뒤 검색한다.
+        # 지시어만 남은 질문("그럼 얼마까지요?")은 그대로 검색하면 무엇에 대한
+        # 질문인지 알 수 없어 엉뚱한 조항이 나온다. 실제 서비스 경로와 같게 맞춘다.
+        history = item.get("history") or []
+        query = rewrite(item["question"], history) if history else item["question"]
+
+        vector = embed_query(query)
         pool = top_k * multiplier if use_mmr else top_k
 
         # 임베딩 모델을 비교할 때는 --no-hybrid로 BM25를 꺼야 한다.
         # 켜두면 키워드 점수가 섞여 모델 간 차이가 희석된다.
         if use_hybrid:
-            candidates = hybrid_search(repository, item["question"], vector, SearchScope(document_id=policy_id), pool)
+            candidates = hybrid_search(repository, query, vector, SearchScope(document_id=policy_id), pool)
         else:
             candidates = repository.search(vector, scope=SearchScope(document_id=policy_id), top_k=pool)
 
@@ -139,9 +180,10 @@ def evaluate(
         ranks.append(rank)
 
         rank_text = str(rank) if rank else "-"
-        print(f'{item["id"]:5} {item.get("type", ""):10} {rank_text:>4}  {item["question"][:52]}')
+        gold_n = gold_density(repository, item["gold"], policy_id)
+        print(f'{item["id"]:5} {item.get("type", ""):10} {gold_n:>5} {rank_text:>4}  {item["question"][:50]}')
 
-    print("-" * 78)
+    print("-" * 84)
     total = len(ranks)
     mode = f"MMR {'O' if use_mmr else 'X'} / hybrid {'O' if use_hybrid else 'X'}"
     print(f"\n질문 {total}개 / {mode} / top_k={top_k}")
@@ -155,6 +197,42 @@ def evaluate(
     # MRR: 첫 정답의 역순위 평균. 정답을 못 찾으면 0으로 센다.
     mrr = sum(1 / r for r in ranks if r) / total
     print(f"  MRR      : {mrr:.4f}")
+
+    # 난이도로 나눠 본다.
+    #
+    # 같은 표준 면책 조항이 여러 특약에 반복되면 정답 청크가 수십 개가 된다.
+    # 그중 아무거나 찾아도 정답이라 1개짜리 문항과는 난이도가 전혀 다르다.
+    # 합쳐서 하나의 Recall로 보면 반복 조항이 점수를 끌어올려 실력을 과대평가한다.
+    print()
+    for label, keep in (
+        ("고유 조항 (gold 1~2개)", lambda n: n <= 2),
+        ("반복 조항 (gold 3개+)", lambda n: n >= 3),
+    ):
+        group = [
+            (q, r)
+            for q, r in zip(questions, ranks)
+            if keep(gold_density(repository, q["gold"], policy_id))
+        ]
+        if group:
+            _report(label, group, top_k)
+
+    # 표현에 따른 차이. 같은 조항을 약관 용어와 일상 표현으로 물었을 때의 격차다.
+    # 하이브리드 검색이 어휘 격차를 실제로 메우는지가 여기서 드러난다.
+    if any(q.get("pair_id") for q in questions):
+        print()
+        for phrasing, label in (("formal", "약관 용어"), ("casual", "일상 표현")):
+            group = [
+                (q, r)
+                for q, r in zip(questions, ranks)
+                if q.get("pair_id") and q.get("phrasing") == phrasing
+            ]
+            if group:
+                _report(label, group, top_k)
+
+    multi = [(q, r) for q, r in zip(questions, ranks) if q.get("history")]
+    if multi:
+        print()
+        _report("멀티턴 (재작성 후)", multi, top_k)
 
     missed = [q["id"] for q, r in zip(questions, ranks) if r is None]
     if missed:
