@@ -9,6 +9,7 @@ from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
 from app.services.embedding_service import embed_query
 from app.services.prompt_builder import SYSTEM_PROMPT, build_user_message
+from app.services.query_rewriter import rewrite
 from app.services.reranker import mmr_select
 
 logger = logging.getLogger(__name__)
@@ -149,13 +150,29 @@ def answer_question(
 ) -> RagQueryResponse:
     settings = get_settings()
 
-    query_vector = embed_query(request.question, client=client)
+    # 인자로 받은 history가 있으면 그것을 쓰고(테스트용), 없으면 요청에 실린 것을 쓴다
+    turns = history if history is not None else [
+        {"role": "user" if t.sender == "USER" else "assistant", "content": t.content}
+        for t in request.history
+    ]
+
+    # 검색에 쓸 질문과 답변에 쓸 질문을 나눈다.
+    #
+    # "그럼 얼마까지 나와요?"로는 검색이 안 된다. 항공기도 지연도 없는 문장이라
+    # 벡터 검색이 엉뚱한 조항을 가져오고, 이력을 프롬프트에 넣어도 근거가 이미 틀렸다.
+    # 검색 전에 "항공기 지연 보상 한도는?"처럼 독립적인 문장으로 바꾼다.
+    #
+    # 다만 LLM에게는 원문을 그대로 준다. 재작성된 문장은 검색용으로 다듬은 것이라
+    # 사용자의 말투와 뉘앙스가 지워져 있고, 답변이 질문과 겉도는 느낌을 준다.
+    search_query = rewrite(request.question, turns)
+
+    query_vector = embed_query(search_query, client=client)
 
     # 후보를 top_k보다 넓게 뽑은 뒤 MMR로 줄인다.
     # 좁게 뽑으면 반복되는 표준 조항이 자리를 다 차지해 정답이 밀려난다.
     candidates = hybrid_search(
         repository,
-        request.question,
+        search_query,
         query_vector,
         scope=SearchScope(document_id=request.document_id, trip_id=request.trip_id),
         top_k=settings.top_k * settings.mmr_candidate_multiplier,
@@ -166,11 +183,6 @@ def answer_question(
 
     hits = mmr_select(candidates, top_k=settings.top_k, lambda_=settings.mmr_lambda)
     hits = attach_related_chunks(hits, repository)
-    # 인자로 받은 history가 있으면 그것을 쓰고(테스트용), 없으면 요청에 실린 것을 쓴다
-    turns = history if history is not None else [
-        {"role": "user" if t.sender == "USER" else "assistant", "content": t.content}
-        for t in request.history
-    ]
     user_message = build_user_message(
         request.question,
         hits,
