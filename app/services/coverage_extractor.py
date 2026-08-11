@@ -27,8 +27,19 @@ SYSTEM_PROMPT = """당신은 여행자보험 약관에서 보장 항목 정보�
 
 규칙:
 1. 제공된 약관 조각에 실제로 적혀 있는 내용만 추출하십시오. 추측하거나 일반 상식으로 채우지 마십시오.
-2. 약관에 없는 값은 null로 두십시오. 특히 금액은 약관에 숫자가 명시된 경우에만 채웁니다.
+2. 약관에 없는 값은 null로 두십시오.
+
+   금액(limitAmount)은 약관에 숫자가 명시된 경우에만 채웁니다.
    "보험증권에 기재된 보험가입금액을 한도로" 처럼 증권을 참조하는 표현은 금액을 알 수 없으므로 null입니다.
+
+   반면 한도 문구(limitLabel)는 항상 채우십시오. 이것은 화면에 그대로 표시되는 문구라
+   비어 있으면 사용자에게 한도 칸이 빈칸으로 보입니다. 숫자가 없더라도 약관이 한도를
+   어떻게 정하는지를 그대로 옮기면 됩니다.
+
+     약관에 숫자가 있음    -> "1개 또는 1조당 20만원 한도"
+     증권을 참조함         -> "보험가입금액 한도 (증권 확인 필요)"
+     조건에 따라 다름      -> "입원 5천만원 / 통원 1회 30만원 한도"
+     자기부담금이 있음      -> "보험가입금액 한도, 자기부담금 공제 후 지급"
 3. exclusions의 sourceText와 sources의 quoteText는 반드시 제공된 조각의 원문을 그대로 옮기십시오.
    문장을 새로 만들지 마십시오.
 4. sources에는 실제로 근거가 된 조각의 chunkId만 넣으십시오.
@@ -56,14 +67,14 @@ EXCLUDED와 NOT_COVERED를 구분하는 것이 중요합니다. 전자는 사용
 OUTPUT_SCHEMA = """{
   "title": "담보 이름 (예: 해외 상해 의료비)",
   "subtitle": "한 줄 요약 또는 null",
-  "limitLabel": "화면 표시용 한도 문구 (예: 최대 1,000만원) 또는 null",
+  "limitLabel": "화면에 그대로 표시할 한도 문구. 반드시 채우십시오. 100자 이내. 숫자가 없으면 '보험가입금액 한도 (증권 확인 필요)'처럼 약관이 한도를 정하는 방식을 옮깁니다",
   "isCovered": true,
   "coverageStatus": "COVERED | PARTIAL | EXCLUDED | NOT_COVERED | UNKNOWN",
   "limitAmount": 10000000,
   "limitCurrency": "KRW",
   "conditions": "보장 조건 요약 또는 null",
-  "detailItems": [{"title": "세부 항목", "subtitle": null, "isCovered": true}],
-  "subLimits": [{"label": "구분", "value": "표시값", "limitAmount": null, "limitCurrency": null, "description": null}],
+  "detailItems": [{"title": "이 담보에 포함되는 개별 보장 항목 (예: 입원의료비, 통원의료비)", "subtitle": "한 줄 설명 또는 null", "isCovered": true}],
+  "subLimits": [{"label": "무엇에 대한 한도인지 (예: 1개당, 입원 1일당, 자기부담금)", "value": "화면에 표시할 값 (예: 20만원, 10%). 200자 이내", "limitAmount": "숫자로 쓸 수 있으면 정수, 아니면 null", "limitCurrency": "KRW 또는 USD", "description": "부연 설명 또는 null"}],
   "requiredDocuments": [{"documentName": "서류명", "isMandatory": true}],
   "exclusions": [{"title": "면책 사유", "description": null, "sourceText": "약관 원문 그대로", "severity": "HIGH | MEDIUM | LOW"}],
   "sources": [{"chunkId": "청크 id", "sourceRole": "COVERAGE | EXCLUSION | LIMIT | DOCUMENT", "quoteText": "약관 원문 그대로"}]
