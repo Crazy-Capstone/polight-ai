@@ -53,6 +53,18 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", "", text).lower()
 
 
+def _git_commit() -> str | None:
+    """측정 시점의 커밋. 어떤 코드로 낸 수치인지 남겨야 나중에 재현할 수 있다."""
+    import subprocess
+
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT, text=True
+        ).strip()
+    except Exception:
+        return None
+
+
 # 검색된 청크 하나가 정답 라벨과 맞는지 판정한다.
 # page가 주어지면 청크의 페이지 범위가 그 페이지를 포함해야 하고,
 # contains 문구는 본문 또는 제목에 있어야 한다.
@@ -133,13 +145,25 @@ def gold_density(repository: FileVectorRepository, gold: list[dict], policy_id: 
     return _density_cache[key]
 
 
-def _report(label: str, group: list[tuple[dict, int | None]], top_k: int) -> None:
+def _report(label: str, group: list[tuple[dict, int | None]], top_k: int) -> dict:
     hit = sum(1 for _, r in group if r is not None and r <= top_k)
     mrr = sum(1 / r for _, r in group if r) / len(group)
     print(f"  {label:22} Recall@{top_k} {hit}/{len(group)} ({hit / len(group) * 100:3.0f}%)  MRR {mrr:.4f}")
+    return {"n": len(group), "hit": hit, "recall": hit / len(group), "mrr": mrr}
 
 
 # ── 평가 ─────────────────────────────────────────────────────
+
+
+def load_clause_paths(repository: FileVectorRepository, policy_id: str) -> list[str]:
+    """해당 약관에 실제로 존재하는 특약명 목록. 증권 담보명을 여기에 맞춰 잇는다."""
+    repository._ensure_loaded()
+    scope = SearchScope(document_id=policy_id)
+    return sorted({
+        c.get("clause_path")
+        for c in repository._chunks
+        if _matches(c, scope) and c.get("clause_path")
+    })
 
 
 def evaluate(
@@ -151,8 +175,16 @@ def evaluate(
     use_hybrid: bool,
     multiplier: int,
     lambda_: float,
-) -> None:
+    clause_paths: tuple[str, ...] | None = None,
+) -> dict:
+    """평가를 돌리고 화면에 출력하면서, 같은 수치를 dict로도 돌려준다.
+
+    dict를 돌려주는 이유: 개선 전후를 비교하려면 화면 출력을 눈으로 옮겨 적는 대신
+    파일로 고정해야 한다. 손으로 옮긴 숫자는 재현되지 않고, 나중에 "그때 몇이었지"를
+    다시 확인할 방법이 없다. --out으로 저장해두면 커밋에 남는다.
+    """
     ranks: list[int | None] = []
+    result: dict = {"per_question": [], "groups": {}}
 
     print(f'{"ID":5} {"유형":10} {"gold":>5} {"순위":>4}  질문')
     print("-" * 84)
@@ -167,12 +199,27 @@ def evaluate(
         vector = embed_query(query)
         pool = top_k * multiplier if use_mmr else top_k
 
-        # 임베딩 모델을 비교할 때는 --no-hybrid로 BM25를 꺼야 한다.
-        # 켜두면 키워드 점수가 섞여 모델 간 차이가 희석된다.
-        if use_hybrid:
-            candidates = hybrid_search(repository, query, vector, SearchScope(document_id=policy_id), pool)
-        else:
-            candidates = repository.search(vector, scope=SearchScope(document_id=policy_id), top_k=pool)
+        def run(scope: SearchScope) -> list[ChunkHit]:
+            # 임베딩 모델을 비교할 때는 --no-hybrid로 BM25를 꺼야 한다.
+            # 켜두면 키워드 점수가 섞여 모델 간 차이가 희석된다.
+            if use_hybrid:
+                return hybrid_search(repository, query, vector, scope, pool)
+            return repository.search(vector, scope=scope, top_k=pool)
+
+        base_scope = SearchScope(document_id=policy_id)
+        candidates: list[ChunkHit] = []
+        fell_back = False
+
+        if clause_paths:
+            candidates = run(SearchScope(document_id=policy_id, clause_paths=clause_paths))
+            # rag_service와 같은 폴백 규칙을 쓴다. 평가와 서비스가 다르게 동작하면
+            # 여기서 좋게 나온 수치가 실제로는 재현되지 않는다.
+            if len(candidates) < top_k:
+                candidates = []
+                fell_back = True
+
+        if not candidates:
+            candidates = run(base_scope)
 
         hits = mmr_select(candidates, top_k=top_k, lambda_=lambda_) if use_mmr else candidates
 
@@ -182,21 +229,37 @@ def evaluate(
         rank_text = str(rank) if rank else "-"
         gold_n = gold_density(repository, item["gold"], policy_id)
         print(f'{item["id"]:5} {item.get("type", ""):10} {gold_n:>5} {rank_text:>4}  {item["question"][:50]}')
+        result["per_question"].append(
+            {
+                "id": item["id"],
+                "type": item.get("type"),
+                "gold_density": gold_n,
+                "rank": rank,
+                "phrasing": item.get("phrasing"),
+                "multiturn": bool(item.get("history")),
+                "fell_back": fell_back,
+            }
+        )
 
     print("-" * 84)
     total = len(ranks)
     mode = f"MMR {'O' if use_mmr else 'X'} / hybrid {'O' if use_hybrid else 'X'}"
     print(f"\n질문 {total}개 / {mode} / top_k={top_k}")
 
+    result["total"] = total
+    result["mode"] = {"mmr": use_mmr, "hybrid": use_hybrid, "top_k": top_k}
+
     for k in RECALL_AT:
         if k > top_k:
             continue
         hit_count = sum(1 for r in ranks if r is not None and r <= k)
         print(f"  Recall@{k}: {hit_count}/{total} ({hit_count / total * 100:.1f}%)")
+        result[f"recall@{k}"] = hit_count / total
 
     # MRR: 첫 정답의 역순위 평균. 정답을 못 찾으면 0으로 센다.
     mrr = sum(1 / r for r in ranks if r) / total
     print(f"  MRR      : {mrr:.4f}")
+    result["mrr"] = mrr
 
     # 난이도로 나눠 본다.
     #
@@ -214,7 +277,7 @@ def evaluate(
             if keep(gold_density(repository, q["gold"], policy_id))
         ]
         if group:
-            _report(label, group, top_k)
+            result["groups"][label] = _report(label, group, top_k)
 
     # 표현에 따른 차이. 같은 조항을 약관 용어와 일상 표현으로 물었을 때의 격차다.
     # 하이브리드 검색이 어휘 격차를 실제로 메우는지가 여기서 드러난다.
@@ -227,16 +290,27 @@ def evaluate(
                 if q.get("pair_id") and q.get("phrasing") == phrasing
             ]
             if group:
-                _report(label, group, top_k)
+                result["groups"][label] = _report(label, group, top_k)
 
     multi = [(q, r) for q, r in zip(questions, ranks) if q.get("history")]
     if multi:
         print()
-        _report("멀티턴 (재작성 후)", multi, top_k)
+        result["groups"]["멀티턴 (재작성 후)"] = _report("멀티턴 (재작성 후)", multi, top_k)
 
     missed = [q["id"] for q, r in zip(questions, ranks) if r is None]
+    result["missed"] = missed
     if missed:
         print(f"\n  실패한 질문: {', '.join(missed)}")
+
+    # 필터가 실제로 몇 문항에 적용됐는지. 폴백이 대부분이면 "필터를 켰다"는 말이
+    # 무의미하므로 이 수치 없이 Recall만 비교하면 결론을 잘못 읽는다.
+    if clause_paths:
+        fell = sum(1 for q in result["per_question"] if q["fell_back"])
+        applied = total - fell
+        result["filter"] = {"clause_paths": list(clause_paths), "applied": applied, "fell_back": fell}
+        print(f"\n  특약 필터 적용 {applied}/{total}문항, 폴백 {fell}문항")
+
+    return result
 
 
 def main() -> None:
@@ -260,6 +334,19 @@ def main() -> None:
         help="BM25를 끄고 벡터 검색만 사용. 임베딩 모델 비교 시 변수를 분리하려면 켜야 한다",
     )
     parser.add_argument("--find", type=str, default=None, help="라벨링 도우미: 키워드로 청크 검색")
+    parser.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="측정 결과를 JSON으로 저장한다. 개선 전후를 비교하려면 baseline을 파일로 고정해야 한다",
+    )
+    parser.add_argument("--note", type=str, default="", help="--out에 함께 남길 메모 (무엇을 바꾼 실행인지)")
+    parser.add_argument(
+        "--certificate",
+        type=str,
+        default=None,
+        help="가상 증권 id (minimal/standard/premium). 그 증권의 담보로 특약 필터를 켠다",
+    )
 
     args = parser.parse_args()
 
@@ -282,7 +369,31 @@ def main() -> None:
         embeddings_dir=Path(args.embeddings_dir),
     )
 
-    evaluate(
+    # 가상 증권으로 특약 필터를 켠다.
+    #
+    # 실제 증권이 없어도 필터 부품만 따로 잴 수 있다. 필터가 받는 것은 특약명 목록이고,
+    # 증권은 그 목록을 만들어주는 수단일 뿐이기 때문이다. 다만 질문마다 정답이 든 특약을
+    # 집어주면 부정행위가 되므로, 실제 증권처럼 담보 세트를 통째로 준다.
+    clause_paths = None
+    if args.certificate:
+        from app.services.clause_matcher import match_coverages  # noqa: E402
+
+        with (PROJECT_ROOT / "data" / "eval" / "virtual_certificates.json").open(encoding="utf-8") as f:
+            certs = json.load(f)["certificates"]
+        cert = next((c for c in certs if c["id"] == args.certificate), None)
+        if cert is None:
+            raise SystemExit(f"가상 증권을 찾을 수 없습니다: {args.certificate}")
+
+        available = load_clause_paths(repository, args.policy_id)
+        clause_paths, report = match_coverages(cert["coverages"], available)
+        print(f'증권: {cert["label"]} - {cert["description"]}')
+        print(f'  담보 {len(cert["coverages"])}개 중 {len(report["matched"])}개 매칭 '
+              f'({report["match_ratio"]:.0%}) -> {report["reason"]}')
+        if report["unmatched"]:
+            print(f'  못 이은 담보: {", ".join(report["unmatched"])}')
+        print()
+
+    result = evaluate(
         questions=questions,
         repository=repository,
         policy_id=args.policy_id,
@@ -291,7 +402,26 @@ def main() -> None:
         use_hybrid=not args.no_hybrid,
         multiplier=settings.mmr_candidate_multiplier,
         lambda_=settings.mmr_lambda,
+        clause_paths=clause_paths,
     )
+
+    if args.out:
+        # 어떤 조건에서 나온 수치인지 함께 남긴다. 수치만 남기면 몇 달 뒤에
+        # "이게 어떤 설정이었지"를 알 수 없어 비교 자체가 불가능해진다.
+        result["meta"] = {
+            "note": args.note,
+            "questions": str(questions_path),
+            "chunks_dir": args.chunks_dir,
+            "embeddings_dir": args.embeddings_dir,
+            "policy_id": args.policy_id,
+            "embedding_provider": settings.embedding_provider,
+            "git_commit": _git_commit(),
+        }
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        print(f"\n측정 결과 저장: {out_path}")
 
 
 if __name__ == "__main__":
