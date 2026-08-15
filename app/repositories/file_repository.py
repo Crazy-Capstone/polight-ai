@@ -11,18 +11,36 @@ logger = logging.getLogger(__name__)
 
 
 # 스코프 일치 판정. pgvector 쪽 _scope_condition과 같은 규칙을 쓴다.
+#
+# 두 저장소가 다르게 필터하면 평가 결과를 신뢰할 수 없다. 평가는 파일 저장소로 돌리고
+# 서비스는 pgvector로 도는데, 규칙이 어긋나면 "평가에서는 좋았는데 실제로는 다른"
+# 상황이 된다. 그래서 조건을 바꿀 때는 항상 양쪽을 같이 고친다.
 def _scope_key(scope: SearchScope | None) -> str | None:
-    if scope is None or scope.is_empty():
+    if scope is None or (scope.is_empty() and not scope.has_clause_filter()):
         return None
-    return scope.document_id or scope.trip_id
+    return scope.document_id or scope.trip_id or "clause-filter"
 
 
 def _matches(chunk: dict, scope: SearchScope | None) -> bool:
-    if scope is None or scope.is_empty():
+    if scope is None:
         return True
-    if scope.document_id:
-        return chunk.get("document_id") == scope.document_id
-    return chunk.get("trip_id") == scope.trip_id
+
+    if not scope.is_empty():
+        if scope.document_id:
+            if chunk.get("document_id") != scope.document_id:
+                return False
+        elif chunk.get("trip_id") != scope.trip_id:
+            return False
+
+    # 증권에서 온 특약명 필터. clause_path가 빈 청크(보통약관 공통 조항)는 항상 통과시킨다.
+    # 청구 절차·용어 정의·일반 면책이 여기 해당하고, 특정 담보에 속하지 않지만
+    # 챗봇 답변에 반드시 필요하다.
+    if scope.has_clause_filter():
+        clause_path = chunk.get("clause_path") or ""
+        if clause_path and clause_path not in scope.clause_paths:
+            return False
+
+    return True
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CHUNKS_DIR = PROJECT_ROOT / "data" / "chunks"
@@ -245,4 +263,7 @@ class FileVectorRepository:
             related_chunk_id=chunk.get("related_chunk_id"),
             score=score,
             embedding=embedding,
+            # 특약 필터 폴백 판정에 쓰인다. pgvector 저장소만 채우면 평가(파일 저장소)와
+            # 서비스가 다르게 동작해, 평가에서 검증한 폴백이 실제로는 안 도는 일이 생긴다.
+            clause_path=chunk.get("clause_path"),
         )
