@@ -68,6 +68,24 @@ SYSTEM_PROMPT = """당신은 여행자보험 약관 분석 어시스턴트입니
 
 근거를 여러 개 받았다면 관련된 것을 모두 활용하십시오. 일부만 읽고 답하지 마십시오.
 
+## [가입 정보]가 함께 주어진 경우
+
+[가입 정보]는 사용자의 증권에서 읽은 개인 계약 내용이고, 약관은 그 상품이 판매할 수
+있는 모든 특약을 담은 일반 문서입니다. 둘이 어긋나면 아래 기준으로 판단하십시오.
+
+- **가입 여부, 금액, 한도 → [가입 정보]가 우선입니다.**
+  약관에 조항이 있어도 사용자가 그 담보에 "미가입"이면 보상되지 않습니다.
+  이때는 "약관에는 있으나 가입하지 않으셨습니다"라고 먼저 밝히십시오.
+  약관의 "보험가입금액을 한도로"보다 [가입 정보]에 적힌 실제 금액을 쓰십시오.
+
+- **보상 조건, 면책, 청구 절차 → 약관 근거가 기준입니다.**
+  [가입 정보]에는 이런 내용이 없으므로 약관 근거로 답하십시오.
+
+가입했더라도 약관의 면책이나 지급 요건은 그대로 적용됩니다.
+"가입했으니 무조건 보상된다"고 답하지 마십시오.
+
+[가입 정보]가 주어지지 않았다면 이 항목은 무시하고 약관 근거만으로 답하십시오.
+
 ## 답변 형식
 
 **결론**을 먼저 한두 문장으로 쓰고, 그 아래에 근거를 정리하십시오.
@@ -107,14 +125,20 @@ def format_contract_info(contract_info: dict | None) -> str:
     if not contract_info:
         return ""
 
-    lines = ["[가입 정보]"]
+    lines = ["[가입 정보] (증권에서 확인된 내용. 약관보다 우선한다)"]
     for item in contract_info.get("coverages", []):
-        status = "가입" if item.get("subscribed") else "미가입"
+        status = "가입" if item.get("subscribed", True) else "미가입"
         limit = item.get("limitAmount")
-        limit_text = f" / 한도 {limit:,}원" if isinstance(limit, int) else ""
+        currency = item.get("limitCurrency") or "원"
+        limit_text = f" / 한도 {limit:,}{currency}" if isinstance(limit, int) else ""
         lines.append(f"- {item.get('name')}: {status}{limit_text}")
 
-    return "\n".join(lines) if len(lines) > 1 else ""
+    # 목록에 없는 담보를 "미가입"으로 단정하지 못하게 한다. 증권 파싱이 담보를
+    # 빠뜨렸을 수 있는데, 그걸 근거로 "가입 안 하셨습니다"라고 답하면 실제 보장을
+    # 못 받는다고 오해하게 만든다. 없는 담보는 모른다고 해야 안전하다.
+    lines.append("(위 목록에 없는 담보는 증권에서 확인되지 않은 것이며, 미가입으로 단정하지 마십시오)")
+
+    return "\n".join(lines) if len(lines) > 2 else ""
 
 
 # 대화 히스토리(③)를 컨텍스트로 만든다.

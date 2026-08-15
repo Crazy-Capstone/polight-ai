@@ -23,6 +23,18 @@ class HistoryTurn(CamelModel):
     content: str
 
 
+# 증권에 적힌 담보 1건.
+#
+# 개인정보 원칙: 판단에 필요한 최소 정보만 받는다. 담보명·가입여부·한도는 필요하지만
+# 이름·생년월일·증권번호·연락처는 LLM에 보낼 이유가 없으므로 필드 자체를 두지 않는다.
+class CertificateCoverage(CamelModel):
+    name: str
+    subscribed: bool = True
+    # 증권에 인쇄된 실제 한도. 약관에는 없는 값이라 이것이 있어야 금액을 답할 수 있다.
+    limit_amount: int | None = None
+    limit_currency: str | None = None
+
+
 # POST /internal/rag/query 요청 바디
 class RagQueryRequest(CamelModel):
     user_id: str
@@ -40,6 +52,26 @@ class RagQueryRequest(CamelModel):
     # 멀티턴 대화용. 없으면 단발 질의로 동작한다.
     session_id: str | None = None
     history: list[HistoryTurn] = []
+
+    # 증권에서 온 특약명 목록. 있으면 그 조항들로 검색을 좁힌다.
+    #
+    # 백엔드가 증권 분석 결과의 담보명을 clause_matcher로 특약명에 이어서 실어 보낸다.
+    # 비어 있으면 필터가 붙지 않아 기존과 동일하게 동작하므로, 증권 경로가 준비되지
+    # 않은 클라이언트도 그대로 쓸 수 있다.
+    #
+    # 다만 실측 결과 이 필터의 검색 품질 개선 효과는 확인되지 않았다(가상 증권 3종,
+    # 답할 수 있는 문항만 비교했을 때 Recall@8 동일). 오답 방지는 아래 coverages로 한다.
+    clause_paths: list[str] = []
+
+    # 증권에 적힌 가입 담보. 프롬프트에 실려 LLM의 판단 근거가 된다.
+    #
+    # 검색 필터보다 이쪽이 중요하다. 약관에는 그 상품이 팔 수 있는 모든 특약이 실려 있어서,
+    # 사용자가 가입하지 않은 담보를 물어도 조항이 검색되고 "보상됩니다"라는 틀린 답이 나간다.
+    # 가입 여부를 알려주면 "가입하지 않으셨습니다"라고 답할 수 있다.
+    #
+    # 금액도 마찬가지다. 약관은 "보험가입금액을 한도로"라고만 쓰여 있어 실제 한도를 알 수 없고,
+    # 그 값은 증권에만 있다(측정: 약관 추출 30건 중 limitAmount가 채워진 것은 3건뿐).
+    coverages: list["CertificateCoverage"] = []
 
 
 # POST /internal/rag/query 응답 바디
