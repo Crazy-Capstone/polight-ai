@@ -108,13 +108,33 @@ WHERE c.id = ANY(%(ids)s::uuid[])
 # 채워 테스트했기 때문에 오래 못 보고 지나간 문제다. document_id는 NOT NULL이라
 # 분석 요청에 항상 실려 오므로 이걸 스코프 키로 쓴다.
 def _scope_condition(scope: SearchScope | None, prefix: str) -> tuple[str, dict]:
-    if scope is None or scope.is_empty():
+    if scope is None or (scope.is_empty() and not scope.has_clause_filter()):
         return "", {}
+
+    conditions: list[str] = []
+    params: dict = {}
 
     # document_id가 있으면 그 약관만 본다. 없으면 여행 단위로 넓힌다.
     if scope.document_id:
-        return f"{prefix} c.document_id = %(document_id)s", {"document_id": scope.document_id}
-    return f"{prefix} c.trip_id = %(trip_id)s", {"trip_id": scope.trip_id}
+        conditions.append("c.document_id = %(document_id)s")
+        params["document_id"] = scope.document_id
+    elif scope.trip_id:
+        conditions.append("c.trip_id = %(trip_id)s")
+        params["trip_id"] = scope.trip_id
+
+    # 증권에서 온 특약명 필터.
+    #
+    # clause_path가 비어 있는 청크를 항상 포함시키는 것이 중요하다. 그것들은 보통약관의
+    # 공통 조항(보험금 청구 절차, 용어 정의, 일반 면책)이라 어느 특약에도 속하지 않지만,
+    # "청구 서류 뭐 필요해요?" 같은 질문의 유일한 근거다. db_travel 222청크 중 34개가
+    # 여기 해당한다. 빼면 그 질문들이 통째로 답을 못 찾는다.
+    if scope.has_clause_filter():
+        conditions.append(
+            "(c.clause_path = ANY(%(clause_paths)s) OR c.clause_path IS NULL OR c.clause_path = '')"
+        )
+        params["clause_paths"] = list(scope.clause_paths)
+
+    return f"{prefix} " + " AND ".join(conditions), params
 
 
 # pgvector 기반 저장소.

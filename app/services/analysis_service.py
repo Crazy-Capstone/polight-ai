@@ -3,6 +3,7 @@ import logging
 import time
 from pathlib import Path
 
+import fitz
 import httpx
 
 from app.clients import spring_client
@@ -17,6 +18,8 @@ from app.schemas.analysis import (
     AnalysisStartRequest,
 )
 from app.services.callback_mapper import to_payload
+from app.services.certificate_adapter import to_payloads
+from app.services.certificate_analyzer import CertificateAnalysisError, analyze_certificate
 from app.services.chunking_service import parse_and_chunk
 from app.services.coverage_extractor import extract_all
 from app.services.embedding_providers import get_provider
@@ -132,6 +135,76 @@ def _safe_notify_complete(
         logger.error("완료 콜백 전달 실패 (분석 자체는 성공): %s", analysis_result_id)
 
 
+# 증권은 1~2페이지, 약관은 100페이지를 넘는다. 이 정도면 겹치지 않는다.
+#
+# 백엔드가 documentType을 보내주면 그걸 쓰고, 안 보내도 동작하게 하려는 안전망이다.
+# 백엔드는 다른 작업 중이라 아직 증권 경로가 없는데, 그쪽 일정에 우리가 묶이면 안 된다.
+CERTIFICATE_MAX_PAGES = 10
+
+
+def _remove_quietly(path: Path) -> None:
+    """파일을 지운다. 삭제 실패로 분석 결과를 버릴 수는 없으니 예외는 삼킨다."""
+    try:
+        path.unlink(missing_ok=True)
+        logger.info("내려받은 증권 삭제: %s", path.name)
+    except OSError as e:
+        logger.warning("내려받은 증권을 지우지 못했습니다 (%s): %s", path, e)
+
+
+def _resolve_document_type(request: AnalysisStartRequest, pdf_path: Path) -> str:
+    """약관인지 증권인지 정한다. 요청에 명시돼 있으면 그것을 믿는다."""
+    if request.document_type:
+        return request.document_type
+
+    try:
+        with fitz.open(pdf_path) as doc:
+            pages = doc.page_count
+    except Exception as e:
+        logger.warning("페이지 수를 세지 못해 약관으로 처리합니다: %s", e)
+        return "TERMS"
+
+    resolved = "CERTIFICATE" if pages <= CERTIFICATE_MAX_PAGES else "TERMS"
+    logger.info("documentType이 없어 페이지 수(%d)로 %s로 판별했습니다", pages, resolved)
+    return resolved
+
+
+# 증권 경로. 약관 경로와 공유하는 것이 없어 함수를 따로 둔다.
+#
+# 약관에서 담보를 발굴하던 것을 증권에서 읽어오는 것으로 바꾸면 LLM 호출이 사라진다.
+# 카테고리별 추출(extract_all)이 7회 돌던 자리가 통째로 없어지고, 대신 Studio Agent가
+# 한 번 돈다. 금액도 이쪽에서만 얻을 수 있다 - 약관에는 "보험가입금액을 한도로"라고만
+# 적혀 있어, 실측에서 약관 추출 30건 중 금액이 채워진 것은 3건뿐이었다.
+def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
+    certificate = analyze_certificate(pdf_path)
+
+    payloads = to_payloads(certificate)
+    if not payloads:
+        raise CertificateAnalysisError(
+            "증권에서 보장 담보를 찾지 못했습니다. 에이전트 출력 형식을 확인하십시오."
+        )
+
+    callback = AnalysisCompleteCallback(
+        analysisResultId=request.analysis_result_id,
+        summary=_build_summary(payloads),
+        coverageItems=payloads,
+        # 백엔드가 이 둘로 약관을 찾아 연결한다.
+        insurerName=certificate.get("insurer_name"),
+        productName=certificate.get("product_name") or certificate.get("document_title"),
+        rawResultJson=json.dumps(certificate, ensure_ascii=False),
+    )
+
+    try:
+        spring_client.notify_complete(callback)
+    except SpringCallbackError:
+        logger.error("완료 콜백 전달 실패 (증권 분석 자체는 성공): %s", request.analysis_result_id)
+
+    logger.info(
+        "증권 분석 완료: 담보 %d건, 금액 %d건 확보",
+        len(payloads),
+        sum(1 for p in payloads if p.limit_amount is not None),
+    )
+
+
 def _safe_notify_fail(analysis_result_id: str, error_message: str) -> None:
     payload = AnalysisFailCallback(analysisResultId=analysis_result_id, errorMessage=error_message)
     try:
@@ -162,6 +235,24 @@ def process_analysis(
 
     try:
         pdf_path = _download_pdf(request.download_url, request.document_id)
+
+        # 증권이면 여기서 끝난다. 청킹도 임베딩도 하지 않는다.
+        # 증권은 화면에 뜰 담보 목록이지 챗봇이 검색할 근거가 아니다.
+        if _resolve_document_type(request, pdf_path) == "CERTIFICATE":
+            try:
+                _process_certificate(request, pdf_path)
+            finally:
+                # 내려받은 증권을 지운다.
+                #
+                # 약관은 재분석에 대비해 남겨두지만 증권은 개인정보다. 피보험자 이름·
+                # 생년월일·증권번호가 들어 있어 디스크에 쌓이면 안 된다.
+                #
+                # 남겨두면 다른 사고도 난다. 실제로 테스트 중에 내려받은 증권이
+                # raw_pdfs에 남아, 약관 색인 배치가 그것을 약관으로 오인해 청킹·임베딩까지
+                # 했다. 공유 약관 인덱스에 개인정보가 섞여 들어간 것이다.
+                _remove_quietly(pdf_path)
+            return
+
         chunks = parse_and_chunk(pdf_path, scope=scope)
         embeddings = embed_chunks(chunks)
         repository.save(
