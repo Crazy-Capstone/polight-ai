@@ -46,6 +46,17 @@ def strip_suffix(text: str) -> str:
     return text
 
 
+# 포함 관계를 근거로 쓰려면 짧은 쪽이 이만큼은 되어야 한다.
+#
+# 실물 증권에서 "상해"(2글자)가 "해외여행 중 폭력상해피해 변호사선임비용 보장 특별약관"에
+# 포함된다는 이유로 1.0을 받아 매칭됐다. 의료비 담보를 물었는데 변호사비 조항이 근거로
+# 올라온다. 두세 글자는 어느 특약 이름에나 들어 있어 포함 관계가 근거가 되지 못한다.
+#
+# 4로 잡으면 "배상책임"·"여권분실" 같은 실제 담보명은 그대로 살고, "상해"·"질병"만 빠진다.
+# 빠진 것들은 어차피 특약명이 아니라 분류명이라, 못 이어도 필터를 안 걸 뿐 손해가 없다.
+MIN_CONTAINMENT_LENGTH = 4
+
+
 def similarity(a: str, b: str) -> float:
     na, nb = strip_suffix(normalize(a)), strip_suffix(normalize(b))
     if not na or not nb:
@@ -53,7 +64,7 @@ def similarity(a: str, b: str) -> float:
     # 한쪽이 다른 쪽을 통째로 포함하면 같은 담보로 본다.
     # "휴대품손해분실제외" vs "해외여행중휴대품손해분실제외" 처럼 증권이 앞부분을
     # 생략하는 경우가 흔한데, SequenceMatcher 비율만으로는 짧은 쪽이 불리하다.
-    if na in nb or nb in na:
+    if (na in nb or nb in na) and min(len(na), len(nb)) >= MIN_CONTAINMENT_LENGTH:
         return 1.0
     return SequenceMatcher(None, na, nb).ratio()
 

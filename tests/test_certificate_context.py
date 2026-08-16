@@ -220,6 +220,27 @@ def test_matches_certificate_names_to_clause_paths(coverage_name, expected):
     assert paths == (expected,)
 
 
+# 두세 글자 담보명은 어느 특약 이름에나 들어 있어 포함 관계가 근거가 되지 못한다.
+#
+# 실물 증권에서 "상해"(2글자)가 "해외여행 중 폭력상해피해 변호사선임비용 보장 특별약관"에
+# 포함된다는 이유로 매칭됐다. 의료비를 물었는데 변호사비 조항이 근거로 올라온다.
+def test_short_coverage_name_does_not_match_by_containment():
+    paths = ["해외여행 중 폭력상해피해 변호사선임비용 보장 특별약관", "해외여행 중 배상책임 특별약관"]
+
+    _, report = match_coverages(["상해"], paths)
+
+    assert report["matched"] == {}, "두 글자 담보명이 무관한 특약에 붙었다"
+
+
+# 네 글자 이상 실제 담보명은 그대로 이어져야 한다. 위 수정으로 같이 죽으면 안 된다.
+def test_real_coverage_names_still_match_by_containment():
+    paths = ["해외여행 중 배상책임 특별약관", "해외여행 중 폭력상해피해 변호사선임비용 보장 특별약관"]
+
+    _, report = match_coverages(["배상책임"], paths)
+
+    assert report["matched"]["배상책임"] == "해외여행 중 배상책임 특별약관"
+
+
 # 매칭이 너무 적게 되면 필터를 거는 것이 오히려 해가 된다.
 # 근거를 못 찾아 "모르겠습니다"가 나가는데, 그건 필터를 안 걸었을 때보다 나쁘다.
 def test_gives_up_filter_when_match_ratio_is_low():
