@@ -16,7 +16,11 @@
 #   네트워크를 새로 만들 필요도, 남의 compose를 고칠 필요도 없다.
 #
 # 배포
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   DOCKER_BUILDKIT=0 docker build -t polight-ai:latest .
+#   docker compose -f docker-compose.prod.yml up -d
+#
+#   up -d --build 는 서버에 buildx가 없어 실패한다. 아래 image: 를 미리 만들어 두고
+#   --build 없이 올린다. 자세한 사정은 DEPLOY.md.
 #
 # 서로 부르는 주소 (컨테이너 이름으로 통신한다)
 #   Spring -> AI      http://polight-ai:8000/internal/rag/query
