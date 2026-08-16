@@ -78,6 +78,13 @@ SYSTEM_PROMPT = """당신은 여행자보험 약관 분석 어시스턴트입니
   이때는 "약관에는 있으나 가입하지 않으셨습니다"라고 먼저 밝히십시오.
   약관의 "보험가입금액을 한도로"보다 [가입 정보]에 적힌 실제 금액을 쓰십시오.
 
+- **목록에 없는 담보를 물으면 머리말을 보고 판단하십시오.**
+  "보장내용 표 전체"라고 적혀 있으면 목록에 없는 담보는 가입하지 않은 것입니다.
+  "가입하지 않으셨습니다"라고 먼저 명확히 답하고, 약관 내용은 참고로만 덧붙이십시오.
+  **"가입되어 있는 경우 보상됩니다"처럼 조건부로 답하지 마십시오. 사용자는 보상된다고
+  읽고, 실제로는 보험금을 받지 못합니다.**
+  그런 표시가 없으면 확인되지 않은 것이므로 미가입으로 단정하지 마십시오.
+
 - **보상 조건, 면책, 청구 절차 → 약관 근거가 기준입니다.**
   [가입 정보]에는 이런 내용이 없으므로 약관 근거로 답하십시오.
 
@@ -125,7 +132,21 @@ def format_contract_info(contract_info: dict | None) -> str:
     if not contract_info:
         return ""
 
-    lines = ["[가입 정보] (증권에서 확인된 내용. 약관보다 우선한다)"]
+    # 목록이 증권 전체인지 일부인지 머리말에서 밝힌다.
+    #
+    # 전체인데 "단정하지 말라"고 하면, 미가입 담보를 물었을 때 "가입되어 있는 경우
+    # 보상받을 수 있습니다"라는 답이 나간다. 사용자는 보상된다고 읽는다.
+    # 반대로 일부인데 "없으면 미가입"으로 두면, 파싱이 빠뜨린 담보를 안 된다고 답하게
+    # 되어 실제 보장을 못 받는다고 오해시킨다. 그래서 어느 쪽인지 알려줘야 한다.
+    complete = bool(contract_info.get("complete"))
+    header = (
+        "[가입 정보] (증권의 보장내용 표 전체입니다. 약관보다 우선하며, "
+        "아래에 없는 담보는 가입하지 않은 것입니다)"
+        if complete
+        else "[가입 정보] (증권에서 확인된 내용. 약관보다 우선한다)"
+    )
+
+    lines = [header]
     for item in contract_info.get("coverages", []):
         status = "가입" if item.get("subscribed", True) else "미가입"
         limit = item.get("limitAmount")
@@ -133,12 +154,15 @@ def format_contract_info(contract_info: dict | None) -> str:
         limit_text = f" / 한도 {limit:,}{currency}" if isinstance(limit, int) else ""
         lines.append(f"- {item.get('name')}: {status}{limit_text}")
 
-    # 목록에 없는 담보를 "미가입"으로 단정하지 못하게 한다. 증권 파싱이 담보를
-    # 빠뜨렸을 수 있는데, 그걸 근거로 "가입 안 하셨습니다"라고 답하면 실제 보장을
-    # 못 받는다고 오해하게 만든다. 없는 담보는 모른다고 해야 안전하다.
-    lines.append("(위 목록에 없는 담보는 증권에서 확인되지 않은 것이며, 미가입으로 단정하지 마십시오)")
+    if len(lines) == 1:
+        return ""
 
-    return "\n".join(lines) if len(lines) > 2 else ""
+    if not complete:
+        lines.append(
+            "(위 목록에 없는 담보는 증권에서 확인되지 않은 것이며, 미가입으로 단정하지 마십시오)"
+        )
+
+    return "\n".join(lines)
 
 
 # 대화 히스토리(③)를 컨텍스트로 만든다.

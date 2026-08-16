@@ -220,7 +220,10 @@ def answer_question(
     # 인자로 받은 contract_info가 우선한다(테스트에서 직접 넣는 경로).
     if contract_info is None and request.coverages:
         contract_info = {
-            "coverages": [c.model_dump(by_alias=True) for c in request.coverages]
+            "coverages": [c.model_dump(by_alias=True) for c in request.coverages],
+            # 목록이 증권 전체인지. 이게 있어야 "목록에 없는 담보"를 미가입으로
+            # 답할지 모른다고 답할지 정해진다.
+            "complete": request.coverages_complete,
         }
 
     user_message = build_user_message(

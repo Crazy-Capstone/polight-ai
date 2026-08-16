@@ -73,6 +73,18 @@ class RagQueryRequest(CamelModel):
     # 그 값은 증권에만 있다(측정: 약관 추출 30건 중 limitAmount가 채워진 것은 3건뿐).
     coverages: list["CertificateCoverage"] = []
 
+    # coverages가 증권의 보장내용 표 전체인지.
+    #
+    # 이 구분이 없으면 목록에 없는 담보를 물었을 때 답이 애매해진다. 실측에서
+    # 증권에 없는 골프용품손해를 물었더니 "가입되어 있는 경우 보상받을 수 있습니다"라고
+    # 답했다. 사용자는 보상된다고 읽는데 실제로는 미가입이다.
+    #
+    # 그렇다고 항상 "없으면 미가입"으로 두면 반대 사고가 난다. 증권 파싱이 담보를
+    # 빠뜨렸을 때 보장되는 담보를 안 된다고 답하게 되고, 그쪽이 더 나쁘다.
+    #
+    # 그래서 보내는 쪽이 알려준다. 기본값은 false라 기존 동작(단정하지 않음)이 유지된다.
+    coverages_complete: bool = False
+
 
 # POST /internal/rag/query 응답 바디
 #

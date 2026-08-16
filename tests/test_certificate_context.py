@@ -40,13 +40,46 @@ def test_contract_info_marks_subscribed_and_not_subscribed():
     assert "해외여행중 항공기 및 수하물 지연비용: 미가입" in text
 
 
-# 목록에 없는 담보를 "미가입"으로 단정하면 안 된다.
+# 목록이 증권 일부일 때는 "미가입"으로 단정하면 안 된다.
 # 증권 파싱이 담보를 빠뜨렸을 때 실제로는 보장되는데 안 된다고 답하게 되고,
 # 그건 보장되는 걸 못 찾는 것보다 나쁘다.
-def test_contract_info_warns_against_assuming_absent_coverage():
+def test_partial_coverage_list_warns_against_assuming_absent():
     text = format_contract_info({"coverages": [{"name": "기본형 실손의료비", "subscribed": True}]})
 
     assert "미가입으로 단정하지 마십시오" in text
+
+
+# 반대로 목록이 증권 전체이면 없는 담보는 미가입이라고 알려줘야 한다.
+#
+# 이 구분이 없을 때 실제로 이런 답이 나갔다. 증권에 골프용품손해가 없는데
+#   "'골프용품손해 특별약관'에 가입되어 있는 경우 보상받을 수 있습니다"
+# 사용자는 보상된다고 읽지만 실제로는 미가입이라 보험금을 못 받는다.
+def test_complete_coverage_list_says_absent_means_not_subscribed():
+    text = format_contract_info(
+        {"coverages": [{"name": "기본형 실손의료비", "subscribed": True}], "complete": True}
+    )
+
+    assert "보장내용 표 전체" in text
+    assert "가입하지 않은 것입니다" in text
+    assert "단정하지 마십시오" not in text, "전체 목록인데 단정하지 말라고 하면 미가입 판정이 안 된다"
+
+
+# 조건부 답변을 금지하는 지시가 살아 있어야 한다. 이게 빠지면 "가입되어 있다면
+# 보상됩니다"로 돌아가고, 화면에는 그럴듯한 답이 나가 눈으로는 알 수 없다.
+def test_system_prompt_forbids_conditional_coverage_answers():
+    from app.services.prompt_builder import SYSTEM_PROMPT
+
+    assert "보장내용 표 전체" in SYSTEM_PROMPT
+    assert "조건부로 답하지 마십시오" in SYSTEM_PROMPT
+
+
+def test_coverages_complete_defaults_to_false():
+    request = RagQueryRequest.model_validate(
+        {"userId": "u", "tripId": "t", "question": "q",
+         "coverages": [{"name": "휴대품손해", "subscribed": True}]}
+    )
+
+    assert request.coverages_complete is False, "기본값이 바뀌면 기존 클라이언트 동작이 달라진다"
 
 
 def test_contract_info_is_empty_without_coverages():
