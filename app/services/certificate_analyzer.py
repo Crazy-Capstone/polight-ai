@@ -35,19 +35,30 @@ class CertificateAnalysisError(RuntimeError):
     """증권 분석 실패. process_analysis가 잡아 FAILED 콜백으로 바꾼다."""
 
 
+def agent_api_key() -> str:
+    """에이전트 호출용 키. 따로 지정하지 않으면 공용 키를 쓴다.
+
+    에이전트가 다른 계정에 있으면 공용 키로는 404가 난다. 인증은 통과하는데
+    그 계정에 그 에이전트가 없어서다. 그때 이 값만 채우면 약관 파싱·임베딩은
+    기존 계정 그대로 두고 증권만 다른 계정으로 부를 수 있다.
+    """
+    settings = get_settings()
+    return settings.upstage_agent_api_key or settings.upstage_api_key
+
+
 def _client() -> OpenAI:
     settings = get_settings()
-    if not settings.upstage_api_key:
-        raise CertificateAnalysisError(".env에 UPSTAGE_API_KEY가 설정되지 않았습니다.")
+    key = agent_api_key()
+    if not key:
+        raise CertificateAnalysisError(
+            ".env에 UPSTAGE_API_KEY(또는 UPSTAGE_AGENT_API_KEY)가 설정되지 않았습니다."
+        )
     if not settings.upstage_agent_id:
         raise CertificateAnalysisError(
             ".env에 UPSTAGE_AGENT_ID가 설정되지 않았습니다. "
             "Upstage Studio의 에이전트 ID(agt_로 시작)를 넣으십시오."
         )
-    return OpenAI(
-        api_key=settings.upstage_api_key,
-        base_url=settings.upstage_agent_base_url,
-    )
+    return OpenAI(api_key=key, base_url=settings.upstage_agent_base_url)
 
 
 def _wait(client: OpenAI, job, interval: float, timeout: float):

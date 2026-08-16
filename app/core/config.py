@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     upstage_agent_id: str = ""
     upstage_agent_base_url: str = "https://api.upstage.ai/v2"
 
+    # 에이전트 호출용 키. 비우면 UPSTAGE_API_KEY를 쓴다.
+    #
+    # 보통은 한 키로 모든 제품을 쓰지만, 그건 같은 계정 안에서만이다. 실제로 약관
+    # 파싱에 쓰던 키로 에이전트를 부르니 404(Resource not found)가 났다. 인증은
+    # 통과하는데 그 계정에 그 에이전트가 없어서다. 계정이 갈려 있을 때 키를 통째로
+    # 바꾸면 약관 파싱·임베딩 과금까지 옮겨가므로, 증권만 따로 지정할 수 있게 둔다.
+    upstage_agent_api_key: str = ""
+
     # 에이전트 설정 버전. 비우면 최신을 쓴다.
     #
     # 기본을 최신으로 둔 이유: Studio에서 에이전트를 고치는 중이라, 고정해두면
