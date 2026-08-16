@@ -4,12 +4,15 @@
 
 ```
 [ EC2 ]
-  ├─ polight-server  (Spring)  ─┐
-  ├─ polight-ai      (우리)     ├─ docker network: polight-net
-  └─ 각자 다른 compose 프로젝트  ─┘
-                  │
-                  └──> RDS (같은 VPC 안이라 그대로 붙는다)
+  ├─ polight-backend (Spring)      ─┐
+  ├─ polight-postgres (pgvector)    ├─ docker network: polight_polight-network
+  ├─ polight-ai      (우리)         ─┘
+  └─ 우리만 compose 프로젝트가 다르다
 ```
+
+DB는 RDS가 아니라 **같은 EC2의 `pgvector/pgvector:pg16` 컨테이너**다. 네트워크도
+Spring compose가 이미 만들어 둔 것이 있어 **새로 만들 필요가 없다.** 우리는 거기
+합류만 하므로 남의 컨테이너 설정을 건드리지 않는다.
 
 ## 왜 같은 호스트인가
 
@@ -24,8 +27,13 @@
 182초 중 대부분이 Upstage·OpenAI **API 응답 대기**라 실제 연산이 거의 없다.
 t3.medium(2 vCPU)으로 환산해도 평균 1% 미만이라 Spring이 느려질 일이 없다.
 
-같은 호스트를 쓰면 **RDS와 같은 VPC 안이라 DB에 그대로 붙고**, 포트를 밖으로
-열 필요도 없다. VPC ID를 받아 별도 EC2를 맞추는 작업이 통째로 사라진다.
+같은 호스트를 쓰면 **DB 컨테이너에 같은 도커 네트워크로 그대로 붙고**, 포트를
+밖으로 열 필요도 없다. VPC·보안그룹을 맞추는 작업이 통째로 사라진다.
+
+**단, 인스턴스 사양이 선행 조건이다.** 1GB 인스턴스에서는 여유 메모리가 200MB
+남짓이라, 우리 컨테이너를 올리면 OOM 킬러가 가장 큰 프로세스인 **JVM(Spring)을
+먼저 죽인다.** t3.medium(4GB) 이상에서만 올린다. 디스크도 8GB로는 빠듯해
+20GB를 권한다. 디스크가 차도 Spring이 같이 죽는다.
 
 ## 왜 compose는 따로인가
 
@@ -42,11 +50,12 @@ t3.medium(2 vCPU)으로 환산해도 평균 1% 미만이라 Spring이 느려질 
 | 항목 | 왜 필요한가 |
 | --- | --- |
 | **콜백 경로** | 우리가 정한 경로로 만들어 뒀다. 다르면 알려주면 환경변수로 맞춘다 |
-| `INTERNAL_API_KEY` | Spring과 같은 값. 문서·커밋에 넣지 않고 별도 채널로 주고받는다 |
-| `SPRING_BASE_URL` | 같은 네트워크면 `http://polight-server:8080` 형태 |
-| DB 접속 정보 | 이미 그 서버에서 RDS에 붙고 있으므로 같은 값을 쓰면 된다 |
+| `INTERNAL_API_KEY` | **아직 Spring 쪽에 없다.** 새로 만들어 양쪽이 같은 값을 쓴다. 문서·커밋에 넣지 않고 별도 채널로 주고받는다 |
+| DB 비밀번호 | `polight-postgres` 컨테이너 환경변수에 있다 |
+| 인스턴스 상향 | t3.medium + EBS 20GB. 중지가 필요하니 트래픽 없는 시간에 |
 
-**VPC ID와 RDS 보안그룹은 더 이상 필요 없다.** 같은 호스트를 쓰기 때문이다.
+**VPC ID도 RDS 보안그룹도 필요 없다.** DB가 같은 호스트의 컨테이너이기 때문이다.
+`SPRING_BASE_URL`도 물어볼 필요 없이 `http://polight-backend:8080`으로 고정이다.
 
 ## 환경변수
 
@@ -56,8 +65,8 @@ t3.medium(2 vCPU)으로 환산해도 평균 1% 미만이라 Spring이 느려질 
 # 필수
 OPENAI_API_KEY=...            # 답변 생성, 보장항목 추출
 UPSTAGE_API_KEY=...           # 문서 파싱, 임베딩
-DATABASE_URL=postgresql://rag_service:...@<rds-endpoint>:5432/polight
-SPRING_BASE_URL=http://<spring-host>:8080
+DATABASE_URL=postgresql://polight:<비밀번호>@postgres:5432/polight
+SPRING_BASE_URL=http://polight-backend:8080
 INTERNAL_API_KEY=...          # openssl rand -base64 32, Spring과 동일
 
 # 선택 (기본값 있음)
@@ -73,28 +82,15 @@ LOG_LEVEL=INFO
 
 ## 실행
 
-**최초 1회 — 공용 네트워크를 만든다**
-
-```bash
-docker network create polight-net
-```
-
-**Spring 쪽 compose에 네트워크를 붙인다** (백엔드가 한 번만)
-
-```yaml
-services:
-  spring:
-    networks: [polight-net]
-networks:
-  polight-net:
-    external: true
-```
-
-**우리 배포**
+**사전 준비는 없다.** Spring compose가 만든 `polight_polight-network`에 합류하므로
+네트워크를 만들 필요도, 백엔드 compose를 고칠 필요도 없다.
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+백엔드가 `docker compose down`을 하면 우리 컨테이너가 붙어 있어 네트워크 삭제에
+실패했다는 경고가 뜬다. 무해하다. 네트워크는 남고 양쪽 다 정상 동작한다.
 
 Spring을 배포해도 이 컨테이너는 건드려지지 않는다. 반대도 마찬가지다.
 
@@ -104,8 +100,12 @@ Spring을 배포해도 이 컨테이너는 건드려지지 않는다. 반대도 
 
 ```
 Spring -> AI      http://polight-ai:8000/internal/rag/query
-AI -> Spring      SPRING_BASE_URL=http://polight-server:8080
+AI -> Spring      SPRING_BASE_URL=http://polight-backend:8080
+AI -> DB          postgresql://polight:...@postgres:5432/polight
 ```
+
+DB 호스트가 `polight-postgres`가 아니라 `postgres`인 것은 compose 서비스명 별칭이라
+그렇다. Spring도 같은 주소를 쓰고 있다.
 
 ## 포트를 열지 않는다
 

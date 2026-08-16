@@ -11,23 +11,21 @@
 #   통째로 날아가고 콜백을 못 보내 analysis_results가 PROCESSING에 고착된다.
 #   에러도 로그도 남지 않아 알아채기 어렵다.
 #
-# 준비 (최초 1회, 호스트에서)
-#   docker network create polight-net
-#
-# 그리고 Spring 쪽 compose에도 같은 네트워크를 붙인다
-#   services:
-#     spring:
-#       networks: [polight-net]
-#   networks:
-#     polight-net:
-#       external: true
+# 준비
+#   없다. Spring compose가 만든 polight_polight-network 에 합류하므로
+#   네트워크를 새로 만들 필요도, 남의 compose를 고칠 필요도 없다.
 #
 # 배포
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
 # 서로 부르는 주소 (컨테이너 이름으로 통신한다)
 #   Spring -> AI      http://polight-ai:8000/internal/rag/query
-#   AI -> Spring      SPRING_BASE_URL=http://polight-server:8080
+#   AI -> Spring      SPRING_BASE_URL=http://polight-backend:8080
+#   AI -> DB          postgresql://polight:...@postgres:5432/polight
+#
+# 주의: 백엔드가 docker compose down 을 하면 우리 컨테이너가 붙어 있어서
+# 네트워크 삭제에 실패했다는 경고가 뜬다. 무해하다. 네트워크는 그대로 남고
+# 양쪽 다 정상 동작한다.
 
 services:
   ai:
@@ -57,7 +55,7 @@ services:
       - "8000"
 
     networks:
-      - polight-net
+      - polight-network
 
     # 약관 PDF와 파싱 캐시를 컨테이너 밖에 둔다.
     #
@@ -88,5 +86,14 @@ volumes:
   ai-data:
 
 networks:
-  polight-net:
+  polight-network:
+    # Spring compose가 이미 만들어 둔 네트워크에 합류한다.
+    #
+    # 공용 네트워크를 새로 만들어 양쪽을 붙이는 방법도 있지만, 그러면 남의
+    # 컨테이너 설정을 건드려야 한다. 여기에 우리만 들어가면 Spring과 postgres는
+    # 손대지 않아도 되고, 컨테이너 이름으로 바로 통신된다.
+    #
+    # 이름은 compose 프로젝트명(polight) + 네트워크명(polight-network)이 붙은 것으로,
+    # docker network ls 로 확인한 실제 이름이다.
+    name: polight_polight-network
     external: true
