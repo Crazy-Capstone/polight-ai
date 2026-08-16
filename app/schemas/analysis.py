@@ -24,6 +24,16 @@ class AnalysisStartRequest(CamelModel):
     # 422로 튕기고 원인을 찾는 시간이 아깝다.
     download_url: str = Field(validation_alias=AliasChoices("downloadUrl", "fileUrl", "download_url"))
 
+    # 약관이냐 증권이냐. 처리 경로가 완전히 다르다.
+    #
+    #   TERMS        파싱 -> 청킹 -> 임베딩 -> 저장. 챗봇이 검색할 근거가 된다
+    #   CERTIFICATE  Studio Agent -> 담보·금액 -> 보장 카드. 화면에 뜨는 내용이 된다
+    #
+    # 기본값을 TERMS로 둔 이유: 백엔드가 이 필드를 보내지 않아도 지금과 똑같이 동작해야
+    # 한다. 백엔드는 다른 작업 중이라 아직 증권 경로가 없고, 그쪽 일정에 우리가 묶이면
+    # 안 된다. 안 보내도 페이지 수로 자동 판별하므로 실제로는 대개 맞는다.
+    document_type: Literal["TERMS", "CERTIFICATE"] | None = None
+
 
 # ── 자식 배열 ────────────────────────────────────────────────
 #
@@ -118,6 +128,11 @@ class AnalysisCompleteCallback(CamelModel):
     embedding_model: str | None = None
     embedding_dimension: int | None = None
     raw_result_json: str | None = None
+
+    # 증권에서 읽은 보험사·상품명. 백엔드가 이걸로 약관을 찾아 연결한다.
+    # 약관 분석일 때는 비어 있다. 자세한 내용은 docs/BACKEND_INTERFACE.md 3-1.
+    insurer_name: str | None = None
+    product_name: str | None = None
 
 
 # Python -> Spring: 분석 실패 콜백.

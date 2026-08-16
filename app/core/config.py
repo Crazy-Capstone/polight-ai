@@ -78,7 +78,28 @@ class Settings(BaseSettings):
 
     # Upstage 문서 파싱. heading 계층과 요소 타입을 제공해
     # policy_chunks의 clause_path와 source_content_type(NOT NULL)을 채운다.
+    #
+    # 증권 분석(Studio Agent)도 같은 키를 쓴다. 도메인이 같고 제품만 다르다.
     upstage_api_key: str = ""
+
+    # 증권 분석 에이전트. Upstage Studio에서 만든 파싱->분류->추출 다단계 파이프라인이다.
+    #
+    # 약관 파싱(/v1/document-digitization)과 다른 API다. 이쪽은 비동기 잡이라
+    # 업로드 -> 생성 -> 폴링 순서로 돈다. 스키마는 에이전트에 저장돼 있어 우리가 들고
+    # 있을 필요가 없다. 비어 있으면 증권 분석 경로가 꺼진다.
+    upstage_agent_id: str = ""
+    upstage_agent_base_url: str = "https://api.upstage.ai/v2"
+
+    # 에이전트 설정 버전. 비우면 최신을 쓴다.
+    #
+    # 기본을 최신으로 둔 이유: Studio에서 에이전트를 고치는 중이라, 고정해두면
+    # 개선한 것이 서버에 반영되지 않아 원인을 찾기 어렵다. 다만 평가 수치를 재현해야
+    # 할 때는 버전을 박아야 한다. Studio를 건드리면 코드 변경 없이 결과가 바뀐다.
+    upstage_agent_config_id: str = ""
+
+    # 폴링 설정. 증권은 1~2페이지라 대개 수십 초 안에 끝난다.
+    certificate_poll_interval: float = 2.0
+    certificate_timeout: float = 180.0
 
     # 임베딩 모델 비교용. 없으면 해당 벤더는 비교에서 자동으로 빠진다.
     qwen_api_key: str = ""
