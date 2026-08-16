@@ -103,6 +103,39 @@ def test_exact_product_name_beats_partial_containment():
         assert match.terms_id == "hyundai_2022", "레지스트리 순서에 따라 결과가 달라진다"
 
 
+# 제휴 판매에서는 증권에 인수사가 따로 표기된다.
+#
+# 실제로 마이뱅크가 파는 상품의 증권에는 "한화손해보험(주)"가 적혀 있는데
+# 약관은 캐롯 해외여행보험이었다. 회사명만 비교하면 NONE이 나와, 담보 13종이
+# 전부 대응하는 약관을 두고도 못 쓴다.
+def test_matches_via_underwriter_alias():
+    registry = [
+        {"id": "carrot", "insurer": "캐롯손해보험", "product": "캐롯 해외여행보험",
+         "aliases": [], "revision": "2025-09-01",
+         "underwriter_aliases": ["한화손해보험", "한화손해보험(주)"]},
+    ]
+
+    match = find_terms("한화손해보험(주)", "해외여행보험", registry=registry)
+
+    assert match.terms_id == "carrot"
+    assert match.is_usable
+
+
+# 별칭을 넓게 잡아 아무 회사나 걸리면 다른 회사 약관으로 보상 조건을 답하게 된다.
+def test_underwriter_alias_does_not_match_unrelated_insurer():
+    registry = [
+        {"id": "carrot", "insurer": "캐롯손해보험", "product": "캐롯 해외여행보험",
+         "aliases": [], "revision": None, "underwriter_aliases": ["한화손해보험"]},
+    ]
+
+    assert find_terms("삼성화재", "해외여행보험", registry=registry).level == "NONE"
+
+
+# 별칭이 없는 기존 항목이 깨지면 안 된다.
+def test_entries_without_underwriter_alias_still_work():
+    assert find_terms("DB손해보험", "프로미 해외여행보험Ⅰ", registry=REGISTRY).terms_id == "db_travel"
+
+
 # 레지스트리의 id는 실제 청크 파일과 이어져야 한다.
 # 여기가 어긋나면 매칭은 성공했는데 검색 결과가 0건이 되고, 원인을 찾기 어렵다.
 def test_registry_ids_point_to_real_chunk_files():

@@ -1,4 +1,20 @@
-"""증권에 적힌 보험사·상품명으로 우리가 가진 약관을 찾는다.
+"""증권에 적힌 보험사·상품명으로 약관을 찾는다.
+
+⚠️ 이 모듈은 요청 경로에서 호출하지 않는다. 증권과 약관을 잇는 것은 백엔드 몫이다.
+약관 메타데이터가 백엔드 DB에 있으므로, 조회는 DB를 아는 쪽이 하는 것이 맞다.
+연동 계약은 docs/BACKEND_INTERFACE.md의 3-1을 참고.
+
+그런데도 이 코드가 있는 이유는 두 가지다.
+
+  로컬 개발·평가용   백엔드 DB 없이 "이 증권이 어느 약관인가"를 알 방법이 없으면
+                    실제 증권으로 챗봇을 돌려볼 수도, 평가를 돌릴 수도 없다.
+  백엔드 참조 구현    아래 4단계 폴백 규칙을 말로 설명하는 것보다 도는 코드를 보여주는
+                    편이 빠르다. 실제로 단순 문자열 일치로는 첫 증권부터 실패한다는
+                    것을 이 코드로 발견했다.
+
+백엔드가 구현하면 이 모듈의 역할은 끝난다. 그때 지우든 평가용으로 남기든 무해하다.
+
+--
 
 증권 분석 결과가 담보와 금액을 주지만, 보상 조건·면책·청구 절차는 약관에만 있다.
 그래서 "이 증권이 어느 약관인가"를 정해야 챗봇이 근거를 댈 수 있다.
@@ -128,9 +144,16 @@ def find_terms(
     """증권의 보험사·상품명으로 약관을 고른다. 못 찾아도 예외를 내지 않고 NONE을 돌려준다."""
     entries = registry if registry is not None else load_registry()
 
-    same_insurer = [
-        e for e in entries if similarity(insurer, e["insurer"], strip_insurer=True) >= INSURER_THRESHOLD
-    ]
+    # 증권에 적힌 회사와 약관을 낸 회사가 다를 수 있다.
+    #
+    # 제휴 판매에서는 증권에 인수사가 따로 표기된다. 실제로 마이뱅크가 파는 상품의
+    # 증권에는 "한화손해보험(주)"가 적혀 있는데 약관은 캐롯 해외여행보험이었다.
+    # 회사명만 비교하면 NONE이 나와, 담보가 다 대응하는 약관을 두고도 못 쓴다.
+    def matches_insurer(entry: dict) -> bool:
+        names = [entry["insurer"], *entry.get("underwriter_aliases", [])]
+        return any(similarity(insurer, n, strip_insurer=True) >= INSURER_THRESHOLD for n in names)
+
+    same_insurer = [e for e in entries if matches_insurer(e)]
     if not same_insurer:
         logger.info("약관을 보유하지 않은 보험사입니다: %s (%s)", insurer, product)
         return NONE_MATCH
