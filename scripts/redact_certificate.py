@@ -41,7 +41,16 @@ EXACT = frozenset({
 
 # 길고 구별되는 낱말은 키 이름 어디에 있어도 지운다.
 SENSITIVE = (
-    "성명", "피보험자", "계약자", "수익자",
+    # 사람을 가리키는 접두어.
+    #
+    # "name"만 전체 일치로 검사했더니 insured_person_name, payer_name이 빠져나가
+    # 실명이 그대로 남았다. 실제 증권을 처리하다 노출됐다. 사람을 가리키는 낱말이
+    # 앞에 붙는 형태가 흔하므로 접두어 자체를 잡는다.
+    #
+    # "insured"는 "insurer"(보험사)와 다른 문자열이라 insurer_name은 걸리지 않는다.
+    # 보험사·상품명은 어댑터에 필요하므로 남아야 한다.
+    "insured", "payer", "holder", "applicant", "beneficiary", "representative",
+    "성명", "피보험자", "계약자", "수익자", "가입자", "대표자",
     "birth", "생년", "생일",
     "ssn", "주민", "resident", "여권", "passport",
     "phone", "mobile", "연락처", "휴대",

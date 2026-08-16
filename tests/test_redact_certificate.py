@@ -9,10 +9,16 @@
 지워졌고, 담보 목록이 사라진 채로 저장됐다.
 """
 
+import pytest
+
 from scripts.redact_certificate import is_sensitive, redact, scrub_text
 
 SAMPLE = {
     "피보험자명": "홍길동",
+    "insured_person_name": "홍길동",
+    "payer_name": "홍길동",
+    "group_policyholder_name": "마이뱅크(주)",
+    "issuer_representative_name": "나채범",
     "생년월일": "1995-03-12",
     "증권번호": "DB-2026-000123",
     "insurerName": "DB손해보험",
@@ -52,6 +58,23 @@ def test_short_words_do_not_match_by_substring():
     assert is_sensitive("coverages") is False
     assert is_sensitive("coverageList") is False
     assert is_sensitive("age") is True
+
+
+# 실제 증권을 처리하다 노출됐다. "name"을 키 전체 일치로만 검사해서
+# insured_person_name, payer_name이 그대로 남았다. 사람을 가리키는 낱말이 앞에
+# 붙는 형태가 흔하므로 접두어 자체를 잡아야 한다.
+@pytest.mark.parametrize("key", [
+    "insured_person_name", "payer_name", "group_policyholder_name",
+    "issuer_representative_name", "applicantName", "beneficiary_name",
+])
+def test_person_name_fields_are_masked(key):
+    assert is_sensitive(key) is True, f"{key}에 실명이 남는다"
+
+
+# insured(피보험자)와 insurer(보험사)는 다른 문자열이다. 보험사명은 어댑터에 필요하다.
+def test_insurer_is_not_confused_with_insured():
+    assert is_sensitive("insurer_name") is False
+    assert is_sensitive("insured_name") is True
 
 
 # productName·coverageName은 "name"을 포함하지만 상품 정보다.
