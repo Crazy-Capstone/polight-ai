@@ -93,9 +93,11 @@ DATABASE_URL=
 그런데 **약관은 거기 없다.** 우리가 미리 색인해 파일로 들고 있기 때문이다.
 
 ```
-DATABASE_URL 비움   ->  파일 저장소     약관 8건 검색됨    (정상)
-DATABASE_URL 채움   ->  policy_chunks  약관 0건          (근거를 못 찾음)
+DATABASE_URL 비움   ->  파일 저장소     스코프가 맞으면 검색됨
+DATABASE_URL 채움   ->  policy_chunks  약관 0건 (아직 비어 있다)
 ```
+
+**단, 비워둔다고 바로 검색되는 것은 아니다.** 아래 "스코프 제약"을 함께 읽는다.
 
 `policy_chunks`는 user_id / analysis_result_id / document_id가 NOT NULL이라
 주인 없는 공유 약관을 넣을 수 없다. 백엔드에 요청한 `policy_terms` 테이블이 생기고
@@ -109,8 +111,17 @@ DATABASE_URL 채움   ->  policy_chunks  약관 0건          (근거를 못 찾
 네트워크를 만들 필요도, 백엔드 compose를 고칠 필요도 없다.
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+DOCKER_BUILDKIT=0 docker build -t polight-ai:latest .
+docker compose -f docker-compose.prod.yml up -d
 ```
+
+**`up -d --build`는 이 서버에서 쓸 수 없다.** compose v5는 빌드에 buildx 0.17 이상을
+요구하는데 설치돼 있지 않고, `docker-buildx-plugin` 패키지도 저장소에 없다. 백엔드는
+ECR에서 완성된 이미지를 받아 쓰기 때문에 서버에서 빌드할 일이 없어 깔리지 않은 것이다.
+
+그래서 예전 빌더로 이미지를 먼저 만들고 compose는 그것을 가져다 쓰게 한다.
+compose 파일에 `image: polight-ai:latest`가 적혀 있어 `--build` 없이 실행하면
+방금 만든 이미지를 그대로 쓴다.
 
 백엔드가 `docker compose down`을 하면 우리 컨테이너가 붙어 있어 네트워크 삭제에
 실패했다는 경고가 뜬다. 무해하다. 네트워크는 남고 양쪽 다 정상 동작한다.
@@ -149,6 +160,33 @@ docker exec polight-ai ls /app/data/embeddings
 ```
 
 두 목록의 개수가 같아야 한다. 임베딩이 빠진 약관은 검색되지 않는다.
+
+### 스코프 제약 — 넣어도 아직 검색되지 않는다
+
+파일을 넣고 재시작해도 **Spring이 보내는 실제 요청으로는 0건이 나온다.** 배포 후
+실측한 내용이다.
+
+```
+청크 2225건에 스코프 필터를 걸어본 결과
+
+  scope 없음 (평가 스크립트 경로)        2225건 통과
+  trip_id만 (Spring 실제 요청)              0건
+  document_id까지 (Spring 실제 요청)        0건
+```
+
+`ingest_terms.py`가 만든 청크는 `user_id`·`trip_id`·`document_id`가 모두 비어 있다.
+공유 약관이라 주인이 없기 때문이다. 그런데 `RagQueryRequest.trip_id`는 필수 필드라
+Spring은 항상 값을 보내고, `_matches`가 `chunk["trip_id"] != scope.trip_id`로
+전부 걸러낸다. 결과가 0건이면 정해진 문구로 답하므로 **에러도 로그도 남지 않는다.**
+
+즉 현재 챗봇 근거 검색은 다음 중 하나가 되어야 동작한다.
+
+- 백엔드가 약관 분석을 돌려 `policy_chunks`가 채워지고 `DATABASE_URL`을 연결한다
+  (정상 경로로 들어온 청크는 스코프가 NOT NULL이라 문제가 없다)
+- `policy_terms` 공유 테이블이 생기고 저장소가 그쪽을 본다
+- 파일 저장소에서 스코프가 빈 청크를 공유 약관으로 보고 통과시킨다 (코드 수정)
+
+증권 분석과 헬스체크는 이 제약과 무관하게 정상 동작한다.
 
 `data/parsed_results`(파싱 캐시)는 옮기지 않아도 된다. 재분석할 때만 쓰이고
 없으면 다시 파싱할 뿐이다. `data/raw_pdfs`도 옮기지 않는다. **증권 PDF가 섞여
