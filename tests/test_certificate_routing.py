@@ -152,6 +152,55 @@ def test_certificate_callback_carries_amounts(captured):
     assert item.limit_label == "US 5만달러"
 
 
+# 증권은 개인정보다. 분석이 끝나면 내려받은 파일을 지워야 한다.
+#
+# 남겨두면 두 가지가 난다. 디스크에 개인정보가 쌓이고, 약관 색인 배치가 그것을
+# 약관으로 오인해 공유 인덱스에 넣는다. 실제로 테스트 중에 후자가 발생했다.
+def test_certificate_pdf_is_deleted_after_analysis(captured, tmp_path, monkeypatch):
+    pdf = make_pdf(tmp_path / "cert_keep.pdf", pages=1)
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+
+    request = AnalysisStartRequest.model_validate({**BASE, "documentType": "CERTIFICATE"})
+    analysis_service.process_analysis(request, repository=None)
+
+    assert not pdf.exists(), "내려받은 증권이 디스크에 남는다"
+
+
+def test_certificate_pdf_is_deleted_even_on_failure(captured, tmp_path, monkeypatch):
+    pdf = make_pdf(tmp_path / "cert_fail.pdf", pages=1)
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+    monkeypatch.setattr(
+        analysis_service,
+        "analyze_certificate",
+        lambda path: (_ for _ in ()).throw(
+            analysis_service.CertificateAnalysisError("실패")
+        ),
+    )
+
+    request = AnalysisStartRequest.model_validate({**BASE, "documentType": "CERTIFICATE"})
+    analysis_service.process_analysis(request, repository=None)
+
+    assert not pdf.exists()
+
+
+# 약관은 반대다. 재분석에 대비해 남긴다. 개인정보가 아니고 다시 받으면 과금된다.
+def test_terms_pdf_is_kept(tmp_path, monkeypatch):
+    pdf = make_pdf(tmp_path / "terms.pdf", pages=160)
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+    monkeypatch.setattr(analysis_service, "parse_and_chunk", lambda p, scope=None: [])
+    monkeypatch.setattr(analysis_service, "embed_chunks", lambda chunks: {})
+    monkeypatch.setattr(analysis_service, "_safe_notify_complete", lambda *a, **k: None)
+
+    class FakeRepo:
+        def save(self, *a, **k):
+            pass
+
+    request = AnalysisStartRequest.model_validate({**BASE, "documentType": "TERMS"})
+    analysis_service.process_analysis(request, repository=FakeRepo())
+
+    assert pdf.exists(), "약관까지 지우면 재분석 때 다시 과금된다"
+
+
 def test_certificate_failure_sends_fail_callback(monkeypatch, captured):
     def explode(path):
         raise analysis_service.CertificateAnalysisError("에이전트 설정 오류")

@@ -142,6 +142,15 @@ def _safe_notify_complete(
 CERTIFICATE_MAX_PAGES = 10
 
 
+def _remove_quietly(path: Path) -> None:
+    """파일을 지운다. 삭제 실패로 분석 결과를 버릴 수는 없으니 예외는 삼킨다."""
+    try:
+        path.unlink(missing_ok=True)
+        logger.info("내려받은 증권 삭제: %s", path.name)
+    except OSError as e:
+        logger.warning("내려받은 증권을 지우지 못했습니다 (%s): %s", path, e)
+
+
 def _resolve_document_type(request: AnalysisStartRequest, pdf_path: Path) -> str:
     """약관인지 증권인지 정한다. 요청에 명시돼 있으면 그것을 믿는다."""
     if request.document_type:
@@ -230,7 +239,18 @@ def process_analysis(
         # 증권이면 여기서 끝난다. 청킹도 임베딩도 하지 않는다.
         # 증권은 화면에 뜰 담보 목록이지 챗봇이 검색할 근거가 아니다.
         if _resolve_document_type(request, pdf_path) == "CERTIFICATE":
-            _process_certificate(request, pdf_path)
+            try:
+                _process_certificate(request, pdf_path)
+            finally:
+                # 내려받은 증권을 지운다.
+                #
+                # 약관은 재분석에 대비해 남겨두지만 증권은 개인정보다. 피보험자 이름·
+                # 생년월일·증권번호가 들어 있어 디스크에 쌓이면 안 된다.
+                #
+                # 남겨두면 다른 사고도 난다. 실제로 테스트 중에 내려받은 증권이
+                # raw_pdfs에 남아, 약관 색인 배치가 그것을 약관으로 오인해 청킹·임베딩까지
+                # 했다. 공유 약관 인덱스에 개인정보가 섞여 들어간 것이다.
+                _remove_quietly(pdf_path)
             return
 
         chunks = parse_and_chunk(pdf_path, scope=scope)
