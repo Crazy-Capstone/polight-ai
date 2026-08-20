@@ -22,6 +22,7 @@ import logging
 import re
 
 from app.schemas.analysis import CoverageItemPayload
+from app.schemas.db_limits import cut
 from app.services.bm25 import tokenize
 from app.schemas.rag import CertificateCoverage
 
@@ -223,17 +224,25 @@ def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemP
         amount, currency = parse_amount(label)
         category = _clean(row.get("coverage_category_level_1"))
 
+        # 길이 컷을 거치는 이유는 약관 경로와 같다(db_limits 참고). 다만 증권
+        # 쪽이 더 위험하다 - 이 값들은 에이전트가 뽑은 문자열이라 길이를 우리가
+        # 통제하지 못한다. 한 글자 넘치면 콜백이 500으로 세 번 튕기고 분석이
+        # PROCESSING에 영구히 남는다.
         payloads.append(
             CoverageItemPayload(
-                title=title,
+                title=cut(title, "title"),
                 coverageStatus="COVERED" if amount is not None else "NOT_COVERED",
-                subtitle=_clean(row.get("coverage_category_level_2")) or None,
-                category=category or None,
+                subtitle=cut(_clean(row.get("coverage_category_level_2")) or None, "subtitle"),
+                category=cut(category or None, "category"),
                 # 원문을 그대로 둔다. "US 5만달러", "(정액) 50만원"처럼 정수로는
                 # 표현할 수 없는 정보가 담겨 있고, 화면에는 이 문구가 나간다.
-                limitLabel=label if label not in NOT_COVERED_MARKS else "보장하지 않음",
+                limitLabel=cut(
+                    label if label not in NOT_COVERED_MARKS else "보장하지 않음",
+                    "limit_label",
+                ),
                 limitAmount=amount,
-                limitCurrency=currency,
+                limitCurrency=cut(currency, "limit_currency"),
+                # conditions는 TEXT 컬럼이라 길이 제한이 없다
                 conditions=_find_description(row, descriptions),
             )
         )
@@ -248,3 +257,28 @@ def coverage_names(certificate: dict) -> list[str]:
         for name in (_clean(row.get("coverage_item_name")) for row in certificate.get("coverage_by_age_table", []))
         if name
     ]
+
+
+# 실패했을 때 남는 것이 이 한 줄뿐이다.
+#
+# 에이전트 출력 원본을 남길 수는 없다. 증권에는 피보험자 이름·생년월일·증권번호가
+# 들어 있고, 로그는 지우기 어렵다. 그런데 원인을 가르는 데 필요한 것은 값이 아니라
+# 모양이다 - 키 이름이 바뀐 것인지, 표가 비어 있는 것인지만 알면 된다.
+#
+# 그래서 키 이름과 개수만 만든다. 값은 어떤 경우에도 넣지 않는다.
+def describe_structure(certificate: dict) -> str:
+    """에이전트 출력의 모양. "coverage_by_age_table[21](name,amount) insurer_name" 형태."""
+    parts: list[str] = []
+
+    for key, value in certificate.items():
+        if isinstance(value, list):
+            first = value[0] if value else None
+            row_keys = ",".join(first.keys()) if isinstance(first, dict) else "-"
+            parts.append(f"{key}[{len(value)}]({row_keys})")
+        elif isinstance(value, dict):
+            parts.append(f"{key}{{{','.join(value.keys())}}}")
+        else:
+            # 스칼라는 키 이름만. 값에 이름·증권번호가 들어 있을 수 있다.
+            parts.append(key)
+
+    return " ".join(parts) or "(빈 객체)"
