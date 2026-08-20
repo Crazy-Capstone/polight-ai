@@ -20,6 +20,7 @@
 
 import logging
 import re
+from datetime import date
 
 from app.schemas.analysis import CoverageItemPayload
 from app.schemas.db_limits import cut
@@ -202,7 +203,19 @@ def to_coverages(certificate: dict, age: int = DEFAULT_AGE) -> list[CertificateC
             )
         )
 
-    return coverages
+    if coverages:
+        return coverages
+
+    # 금액 표가 비면 설명 표에서 담보명만 가져온다. 한도는 모르지만 가입 여부는
+    # 알려줄 수 있고, 챗봇 오답의 대부분이 가입 여부에서 난다.
+    return [
+        CertificateCoverage(name=name, subscribed=True)
+        for name in (
+            _clean(row.get("benefit_name"))
+            for row in certificate.get("coverage_description_table") or []
+        )
+        if name
+    ]
 
 
 def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemPayload]:
@@ -247,6 +260,55 @@ def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemP
             )
         )
 
+    if payloads:
+        return payloads
+
+    return _payloads_from_descriptions(certificate)
+
+
+# 금액 표가 비었을 때 설명 표로 카드를 만든다.
+#
+# 에이전트 스키마가 한화손보 양식 전용이라, 다른 보험사 증권에서는 금액 표가
+# 통째로 빈 배열로 나온다. 현대해상 증권이 그랬다 - 금액은 "1인당 보상한도액"
+# 단일 컬럼인데 스키마는 연령대별 2컬럼을 찾는다. 그래서 0건이 됐다.
+#
+# 그때 설명 표는 살아 있다(담보 11건 정상). 그것마저 버리면 화면에 아무것도
+# 못 띄우고 "분석 실패"로 끝나는데, 담보 목록만이라도 띄우는 편이 낫다.
+# 챗봇도 가입 담보를 알아야 "미가입인데 보상된다"는 오답을 막을 수 있다.
+#
+# 한도는 비운다. 설명문에 섞인 숫자는 자기부담금·물품당 한도라 가입금액이 아니다.
+# 실측에서 "1만원", "200,000원"이 그런 값이었다. 그걸 한도로 올리면 1억원짜리
+# 담보가 화면에 1만원으로 뜬다.
+#
+# coverageStatus는 COVERED로 둔다. 금액을 모르는 것과 미보장은 다르다.
+# 여기서 NOT_COVERED로 두면 가입한 담보를 "미보장"으로 표시하게 되는데,
+# 그쪽이 더 나쁜 오답이다(BACKEND_INTERFACE 3-2와 같은 판단).
+FALLBACK_LIMIT_LABEL = "한도 확인 필요"
+
+
+def _payloads_from_descriptions(certificate: dict) -> list[CoverageItemPayload]:
+    rows = certificate.get("coverage_description_table") or []
+    payloads: list[CoverageItemPayload] = []
+
+    for row in rows:
+        title = _clean(row.get("benefit_name"))
+        if not title:
+            continue
+        payloads.append(
+            CoverageItemPayload(
+                title=cut(title, "title"),
+                coverageStatus="COVERED",
+                limitLabel=FALLBACK_LIMIT_LABEL,
+                conditions=_clean(row.get("benefit_description")) or None,
+            )
+        )
+
+    if payloads:
+        logger.warning(
+            "금액 표가 비어 설명 표로 카드를 만들었습니다 (담보 %d건, 한도 없음). "
+            "에이전트의 금액 표 추출을 확인하십시오.",
+            len(payloads),
+        )
     return payloads
 
 
@@ -257,6 +319,66 @@ def coverage_names(certificate: dict) -> list[str]:
         for name in (_clean(row.get("coverage_item_name")) for row in certificate.get("coverage_by_age_table", []))
         if name
     ]
+
+
+# 보험기간. policies.start_date/end_date가 NOT NULL이라 백엔드가 요청한 값이다.
+#
+# 에이전트가 이미 뽑고 있었다("2026-07-30 20:00"). 저희가 읽는 코드만 없어서
+# "확인 중"으로 답하고 있었다.
+#
+# 형식이 보험사마다 다를 수 있어(2026.07.30, 2026/07/30) 구분자를 가리지 않는다.
+# 백엔드에 보내는 형식은 YYYY-MM-DD로 고정한다.
+PERIOD_KEYS = (
+    ("insurance_period_start_datetime", "insurance_period_end_datetime"),
+    ("insurance_start_date", "insurance_end_date"),
+    ("policy_period_start", "policy_period_end"),
+)
+
+DATE_PATTERN = re.compile(r"(\d{4})[-./](\d{1,2})[-./](\d{1,2})")
+
+
+def _as_date(value: object) -> str | None:
+    """앞에서 처음 만나는 날짜를 YYYY-MM-DD로 돌려준다. 시각은 버린다."""
+    if not isinstance(value, str):
+        return None
+    m = DATE_PATTERN.search(value)
+    if not m:
+        return None
+    year, month, day = (int(g) for g in m.groups())
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        # 2026-13-45 같은 값. 틀린 날짜를 NOT NULL 컬럼에 넣는 것보다 비우는 편이 낫다.
+        logger.info("보험기간을 날짜로 읽지 못했습니다: %r", value)
+        return None
+
+
+def insurance_period(certificate: dict) -> tuple[str | None, str | None]:
+    """(시작일, 종료일). 못 읽으면 (None, None)."""
+    for start_key, end_key in PERIOD_KEYS:
+        start = _as_date(certificate.get(start_key))
+        end = _as_date(certificate.get(end_key))
+        if start or end:
+            return start, end
+    return None, None
+
+
+# 증권으로 보이는지. 담보를 못 찾았을 때 "증권이 아니다"와 "증권인데 표를 못 읽었다"를
+# 가른다.
+#
+# 처음에는 페이지 수로 갈랐는데 틀렸다. 현대해상은 증권 2장과 약관 153장을 한 파일로
+# 발급한다(실물 157페이지). 페이지 수로 보면 약관인데 실제로는 정상 증권이다.
+# 그래서 두께가 아니라 에이전트가 증권 고유 항목을 뽑았는지로 판단한다.
+CERTIFICATE_MARKERS = (
+    "policy_number",
+    "insurance_period_start_datetime",
+    "insurer_name",
+    "document_title",
+)
+
+
+def looks_like_certificate(certificate: dict) -> bool:
+    return any(certificate.get(key) for key in CERTIFICATE_MARKERS)
 
 
 # 실패했을 때 남는 것이 이 한 줄뿐이다.

@@ -19,7 +19,12 @@ from app.schemas.analysis import (
 )
 from app.services.analysis_errors import AnalysisFailure
 from app.services.callback_mapper import to_payload
-from app.services.certificate_adapter import describe_structure, to_payloads
+from app.services.certificate_adapter import (
+    describe_structure,
+    insurance_period,
+    looks_like_certificate,
+    to_payloads,
+)
 from app.services.certificate_analyzer import CertificateAnalysisError, analyze_certificate
 from app.services.chunking_service import parse_and_chunk
 from app.services.coverage_extractor import extract_all
@@ -157,15 +162,13 @@ def _remove_quietly(path: Path) -> None:
         logger.warning("내려받은 증권을 지우지 못했습니다 (%s): %s", path, e)
 
 
-# 증권이라고 선언됐는데 이 정도로 두꺼우면 증권이 아니다.
+# 두께로 증권과 약관을 가르려 했으나 폐기했다.
 #
-# 실측 증권은 1~2페이지, 약관은 126페이지다. 30은 그 사이 어디에도 없는 값이라
-# 애매한 문서를 잘못 지목하지 않는다.
+# 현대해상은 증권 2장과 약관 153장을 한 파일로 발급한다(실물 157페이지). 두께로
+# 보면 약관인데 실제로는 정상 증권이다. 오분류 판정은 에이전트가 증권 고유 항목을
+# 뽑았는지로 한다(certificate_adapter.looks_like_certificate).
 #
-# 여기서 경로를 뒤집지는 않는다. 백엔드가 "페이지 수로 추측하지 않도록 명시해
-# 보낸다"고 한 값을 우리가 무시하면, 어느 쪽이 맞는지 아무도 모르는 상태가 된다.
-# 대신 담보를 못 찾았을 때 실패 사유를 오분류 쪽으로 돌린다.
-TERMS_LIKE_PAGES = 30
+# 페이지 수는 진단 정보로만 남긴다.
 
 
 def _page_count(pdf_path: Path) -> int | None:
@@ -181,14 +184,17 @@ def _page_count(pdf_path: Path) -> int | None:
 def _resolve_document_type(request: AnalysisStartRequest, pdf_path: Path) -> str:
     """약관인지 증권인지 정한다. 요청에 명시돼 있으면 그것을 믿는다."""
     if request.document_type:
-        # 믿되, 어긋나면 남긴다. 프론트가 documentKind를 보내지 않고 백엔드
-        # 기본값이 CERTIFICATE라, 약관을 올려도 증권 경로로 직행할 수 있다.
-        # 그때 증상은 "담보를 못 찾았다"로만 보여 오분류가 가려진다.
+        # 믿는다. 다만 몇 페이지가 들어왔는지는 남긴다.
+        #
+        # 증권이 두꺼우면 오분류일 수도 있고(프론트가 documentKind를 보내지 않아
+        # 백엔드 기본값 CERTIFICATE로 흘러온 경우), 약관 합본일 수도 있다.
+        # 두 경우를 두께로는 구분할 수 없으니 판정하지 않고 기록만 한다.
+        # 합본이면 에이전트에 약관 150여 장이 함께 올라가 분석이 느려진다.
         pages = _page_count(pdf_path) if request.document_type == "CERTIFICATE" else None
-        if pages is not None and pages > TERMS_LIKE_PAGES:
-            logger.warning(
-                "CERTIFICATE로 요청됐지만 %d페이지입니다. 약관을 증권으로 올린 것이 "
-                "아닌지 확인이 필요합니다 (documentId=%s)",
+        if pages is not None and pages > CERTIFICATE_MAX_PAGES:
+            logger.info(
+                "CERTIFICATE로 요청된 문서가 %d페이지입니다 (약관 합본이거나 오분류). "
+                "documentId=%s",
                 pages, request.document_id,
             )
         return request.document_type
@@ -219,19 +225,27 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
 
     payloads = to_payloads(certificate)
     if not payloads:
-        pages = _page_count(pdf_path)
-        if pages is not None and pages > TERMS_LIKE_PAGES:
+        if not looks_like_certificate(certificate):
             # 담보가 없는 것이 아니라 애초에 증권이 아니다. 이걸 "담보를 못
             # 찾았다"로 끝내면 사용자는 증권을 다시 올려도 같은 실패를 본다.
             raise CertificateAnalysisError(
-                f"증권으로 요청됐지만 {pages}페이지다. 약관을 증권으로 올린 것으로 보인다 "
-                f"(documentId={request.document_id})",
+                "증권 고유 항목(증권번호·보험기간·보험사)이 하나도 없다. 증권이 아닌 "
+                f"문서로 보인다 (documentId={request.document_id}): "
+                + describe_structure(certificate),
                 user_message="증권이 아닌 문서로 보입니다. 보험 증권 파일인지 확인해 주세요.",
             )
         raise CertificateAnalysisError(
             "증권에서 보장 담보를 찾지 못했습니다. 에이전트 출력 구조: "
             + describe_structure(certificate),
             user_message="증권에서 보장 내용을 찾지 못했습니다. 증권 원본 파일인지 확인해 주세요.",
+        )
+
+    start_date, end_date = insurance_period(certificate)
+    if not start_date or not end_date:
+        # policies.start_date/end_date가 NOT NULL이라, 비면 백엔드가 행을 만들 수 없다.
+        logger.warning(
+            "증권에서 보험기간을 읽지 못했습니다 (%s ~ %s). 에이전트 출력 키를 확인하십시오.",
+            start_date, end_date,
         )
 
     callback = AnalysisCompleteCallback(
@@ -241,6 +255,9 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
         # 백엔드가 이 둘로 약관을 찾아 연결한다.
         insurerName=certificate.get("insurer_name"),
         productName=certificate.get("product_name") or certificate.get("document_title"),
+        # policies의 NOT NULL 두 개. 증권에만 있는 값이다.
+        startDate=start_date,
+        endDate=end_date,
         rawResultJson=json.dumps(certificate, ensure_ascii=False),
     )
 

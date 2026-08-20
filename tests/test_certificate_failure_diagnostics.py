@@ -103,10 +103,13 @@ def test_structure_reveals_renamed_keys():
 # 담보가 0건인 것과 애초에 증권이 아닌 것은 사용자가 할 일이 다르다.
 # 전자는 "다른 증권으로", 후자는 "증권을 올려주세요"다. 같은 문구로 끝내면
 # 사용자는 증권을 다시 올려도 같은 실패를 본다.
-def test_terms_uploaded_as_certificate_says_so(monkeypatch, captured, tmp_path):
-    pdf = make_pdf(tmp_path / "terms.pdf", pages=126)
-    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
-    monkeypatch.setattr(analysis_service, "analyze_certificate", lambda path: {"content": "..."})
+#
+# 두께로 가르지 않는다. 처음에 페이지 수로 판정했다가 틀렸다 - 아래 테스트 참고.
+def test_non_certificate_document_says_so(monkeypatch, captured):
+    monkeypatch.setattr(
+        analysis_service, "analyze_certificate",
+        lambda path: {"content": "...", "elements": []},
+    )
 
     analysis_service.process_analysis(
         AnalysisStartRequest.model_validate(BASE), repository=None
@@ -115,10 +118,36 @@ def test_terms_uploaded_as_certificate_says_so(monkeypatch, captured, tmp_path):
     assert "증권이 아닌" in captured["fail"].error_message
 
 
+# 157페이지짜리 증권이 실재한다. 현대해상은 증권 2장과 약관 153장을 한 파일로
+# 발급한다. 두께로 판정하면 이 정상 증권을 "증권이 아니다"로 되돌린다.
+def test_thick_bundled_certificate_is_not_called_a_wrong_document(
+    monkeypatch, captured, tmp_path
+):
+    pdf = make_pdf(tmp_path / "bundled.pdf", pages=157)
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+    monkeypatch.setattr(
+        analysis_service, "analyze_certificate",
+        lambda path: {
+            "policy_number": "F-26PA-0120186",
+            "insurer_name": "현대해상",
+            "coverage_by_age_table": [],
+            "coverage_description_table": [],
+        },
+    )
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate(BASE), repository=None
+    )
+
+    sent = captured["fail"].error_message
+    assert "증권이 아닌" not in sent, "정상 증권을 잘못된 문서로 되돌린다"
+    assert "보장 내용을 찾지 못했습니다" in sent
+
+
 def test_empty_table_asks_for_the_original(monkeypatch, captured):
     monkeypatch.setattr(
         analysis_service, "analyze_certificate",
-        lambda path: {"coverage_by_age_table": []},
+        lambda path: {"policy_number": "F-1", "coverage_by_age_table": []},
     )
 
     analysis_service.process_analysis(
