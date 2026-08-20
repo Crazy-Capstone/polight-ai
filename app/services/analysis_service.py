@@ -17,8 +17,9 @@ from app.schemas.analysis import (
     AnalysisFailCallback,
     AnalysisStartRequest,
 )
+from app.services.analysis_errors import AnalysisFailure
 from app.services.callback_mapper import to_payload
-from app.services.certificate_adapter import to_payloads
+from app.services.certificate_adapter import describe_structure, to_payloads
 from app.services.certificate_analyzer import CertificateAnalysisError, analyze_certificate
 from app.services.chunking_service import parse_and_chunk
 from app.services.coverage_extractor import extract_all
@@ -76,7 +77,12 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
                 logger.warning("PDF 내려받기 실패 (%d/%d): %s", attempt, DOWNLOAD_MAX_ATTEMPTS, e)
                 time.sleep(2.0 * attempt)
 
-    raise RuntimeError(f"약관 PDF를 내려받지 못했습니다 ({download_url}): {last_error}")
+    # 주소를 사용자 문구에 넣지 않는다. presigned URL에는 서명이 붙어 있고,
+    # 실패 사유는 analysis_results.failure_reason에 영구 저장된 뒤 화면에 뜬다.
+    raise AnalysisFailure(
+        f"PDF를 내려받지 못했습니다 ({download_url}): {last_error}",
+        user_message="문서를 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    )
 
 
 # 화면에 노출되는 요약 문구.
@@ -151,16 +157,45 @@ def _remove_quietly(path: Path) -> None:
         logger.warning("내려받은 증권을 지우지 못했습니다 (%s): %s", path, e)
 
 
+# 증권이라고 선언됐는데 이 정도로 두꺼우면 증권이 아니다.
+#
+# 실측 증권은 1~2페이지, 약관은 126페이지다. 30은 그 사이 어디에도 없는 값이라
+# 애매한 문서를 잘못 지목하지 않는다.
+#
+# 여기서 경로를 뒤집지는 않는다. 백엔드가 "페이지 수로 추측하지 않도록 명시해
+# 보낸다"고 한 값을 우리가 무시하면, 어느 쪽이 맞는지 아무도 모르는 상태가 된다.
+# 대신 담보를 못 찾았을 때 실패 사유를 오분류 쪽으로 돌린다.
+TERMS_LIKE_PAGES = 30
+
+
+def _page_count(pdf_path: Path) -> int | None:
+    """페이지 수. 못 세면 None. 세는 데 실패한 것으로 분석을 멈추지는 않는다."""
+    try:
+        with fitz.open(pdf_path) as doc:
+            return doc.page_count
+    except Exception as e:
+        logger.warning("페이지 수를 세지 못했습니다: %s", e)
+        return None
+
+
 def _resolve_document_type(request: AnalysisStartRequest, pdf_path: Path) -> str:
     """약관인지 증권인지 정한다. 요청에 명시돼 있으면 그것을 믿는다."""
     if request.document_type:
+        # 믿되, 어긋나면 남긴다. 프론트가 documentKind를 보내지 않고 백엔드
+        # 기본값이 CERTIFICATE라, 약관을 올려도 증권 경로로 직행할 수 있다.
+        # 그때 증상은 "담보를 못 찾았다"로만 보여 오분류가 가려진다.
+        pages = _page_count(pdf_path) if request.document_type == "CERTIFICATE" else None
+        if pages is not None and pages > TERMS_LIKE_PAGES:
+            logger.warning(
+                "CERTIFICATE로 요청됐지만 %d페이지입니다. 약관을 증권으로 올린 것이 "
+                "아닌지 확인이 필요합니다 (documentId=%s)",
+                pages, request.document_id,
+            )
         return request.document_type
 
-    try:
-        with fitz.open(pdf_path) as doc:
-            pages = doc.page_count
-    except Exception as e:
-        logger.warning("페이지 수를 세지 못해 약관으로 처리합니다: %s", e)
+    pages = _page_count(pdf_path)
+    if pages is None:
+        logger.warning("페이지 수를 세지 못해 약관으로 처리합니다")
         return "TERMS"
 
     resolved = "CERTIFICATE" if pages <= CERTIFICATE_MAX_PAGES else "TERMS"
@@ -177,10 +212,26 @@ def _resolve_document_type(request: AnalysisStartRequest, pdf_path: Path) -> str
 def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
     certificate = analyze_certificate(pdf_path)
 
+    # 성공이든 실패든 한 줄 남긴다. 실패했을 때 이 줄이 유일한 단서이고,
+    # 성공했을 때는 나중에 Studio에서 스키마가 바뀌었는지 비교할 기준이 된다.
+    # 값은 넣지 않는다(describe_structure 주석 참고).
+    logger.info("증권 에이전트 출력 구조: %s", describe_structure(certificate))
+
     payloads = to_payloads(certificate)
     if not payloads:
+        pages = _page_count(pdf_path)
+        if pages is not None and pages > TERMS_LIKE_PAGES:
+            # 담보가 없는 것이 아니라 애초에 증권이 아니다. 이걸 "담보를 못
+            # 찾았다"로 끝내면 사용자는 증권을 다시 올려도 같은 실패를 본다.
+            raise CertificateAnalysisError(
+                f"증권으로 요청됐지만 {pages}페이지다. 약관을 증권으로 올린 것으로 보인다 "
+                f"(documentId={request.document_id})",
+                user_message="증권이 아닌 문서로 보입니다. 보험 증권 파일인지 확인해 주세요.",
+            )
         raise CertificateAnalysisError(
-            "증권에서 보장 담보를 찾지 못했습니다. 에이전트 출력 형식을 확인하십시오."
+            "증권에서 보장 담보를 찾지 못했습니다. 에이전트 출력 구조: "
+            + describe_structure(certificate),
+            user_message="증권에서 보장 내용을 찾지 못했습니다. 증권 원본 파일인지 확인해 주세요.",
         )
 
     callback = AnalysisCompleteCallback(
@@ -261,9 +312,16 @@ def process_analysis(
             analysis_result_id=request.analysis_result_id,
             scope=scope,
         )
-    except Exception as e:
-        logger.exception("analysis pipeline failed: %s", request.analysis_result_id)
-        _safe_notify_fail(request.analysis_result_id, str(e))
+    except AnalysisFailure as e:
+        # 사용자에게는 e.user_message만 나간다. 원인은 위 traceback에 남는다.
+        logger.exception("분석 실패: %s", request.analysis_result_id)
+        _safe_notify_fail(request.analysis_result_id, e.user_message)
+        return
+    except Exception:
+        # 우리가 예상하지 못한 예외다. 메시지에 무엇이 들어 있을지 알 수 없으니
+        # 사용자에게 보내지 않는다. 추적은 traceback과 analysisResultId로 한다.
+        logger.exception("분석 실패 (예상하지 못한 오류): %s", request.analysis_result_id)
+        _safe_notify_fail(request.analysis_result_id, AnalysisFailure.user_message)
         return
 
     # pgvector 저장소는 INSERT하며 policy_chunks.id(UUID)를 만들고 청크에 실어준다.
