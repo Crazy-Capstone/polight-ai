@@ -93,7 +93,9 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
 
     # 괄호 주석("(정액)")과 통화 표기를 걷어낸다. 숫자와 단위만 남긴다.
     cleaned = re.sub(r"\([^)]*\)", "", raw)
-    cleaned = re.sub(r"(US|USD|\$|달러|원|미불)", "", cleaned)
+    # 긴 표기를 먼저 지운다. "US"가 앞에 오면 "USD"에서 "US"만 지워져 "D"가 남고,
+    # 그 뒤 숫자 변환이 실패해 금액을 통째로 놓친다("50,000 USD" -> None).
+    cleaned = re.sub(r"(USD|US\$|US|\$|달러|원|미불)", "", cleaned)
     cleaned = cleaned.replace(",", "").strip()
 
     if not re.search(r"\d", cleaned):

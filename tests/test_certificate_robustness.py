@@ -14,6 +14,8 @@ Studio에서 스키마를 손대면 코드 변경 없이 즉시 반영된다(UPS
 
 import logging
 
+import pytest
+
 from app.services.certificate_adapter import (
     coverage_names,
     parse_amount,
@@ -133,6 +135,34 @@ def test_normal_amounts_are_unaffected():
     assert parse_amount("3억원") == (300_000_000, "KRW")
     assert parse_amount("US 5만달러") == (50_000, "USD")
     assert parse_amount("(정액) 50만원") == (500_000, "KRW")
+
+
+# 통화 표기를 걷어내는 순서 때문에 금액을 놓치던 버그.
+#
+# "US|USD" 순서면 "USD"에서 "US"만 지워져 "D"가 남고, 숫자 변환이 실패해 금액이
+# 통째로 사라진다. 통화는 USD로 잡히는데 한도가 비어 화면에 "미상"으로 뜬다.
+# 에이전트가 인쇄 문자열을 그대로 보존하면 이 형태가 실제로 들어온다.
+@pytest.mark.parametrize(
+    "text",
+    ["50,000 USD", "USD 50,000", "US$ 50,000", "US 5만달러", "5만 USD"],
+)
+def test_dollar_notations_all_yield_the_amount(text):
+    assert parse_amount(text) == (50_000, "USD")
+
+
+# 단위가 없는 숫자는 원화로 본다. 지금 에이전트 출력이 이 형태다("100,000,000").
+def test_bare_number_is_read_as_krw():
+    assert parse_amount("100,000,000") == (100_000_000, "KRW")
+
+
+# 한도가 없다는 표현은 금액을 비우되 미보장으로 만들지 않는다.
+@pytest.mark.parametrize("text", ["무제한", "한도 없음", "보험가입금액 한도"])
+def test_unlimited_is_covered_without_amount(text):
+    amount, currency = parse_amount(text)
+
+    assert amount is None
+    assert currency == "KRW"
+    assert to_payloads(one_row(coverage_amount_age_15_80=text))[0].coverage_status == "COVERED"
 
 
 # ── 부분 실패 ────────────────────────────────────────────────
