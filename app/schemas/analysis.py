@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 
 from app.schemas.base import CamelModel
 
@@ -33,6 +33,20 @@ class AnalysisStartRequest(CamelModel):
     # 한다. 백엔드는 다른 작업 중이라 아직 증권 경로가 없고, 그쪽 일정에 우리가 묶이면
     # 안 된다. 안 보내도 페이지 수로 자동 판별하므로 실제로는 대개 맞는다.
     document_type: Literal["TERMS", "CERTIFICATE"] | None = None
+
+    # PDF 열기 암호. 보험사가 증권을 생년월일 6자리 같은 암호로 잠가 배포한다.
+    #
+    # 사용자가 뷰어에서 암호를 없애는 것은 유료 기능이라 실질적으로 어렵다. 그런데
+    # 사용자는 암호를 알고 있으므로, 파일을 고치게 하는 대신 암호만 받아 서버에서
+    # 복호화하는 편이 낫다.
+    #
+    # SecretStr인 이유: 이 값이 로그·예외 메시지·콜백에 섞여 나가면 안 된다.
+    # repr이 마스킹되므로 실수로 찍어도 값이 노출되지 않는다. 저장하지 않고
+    # 복호화에 한 번 쓰고 버린다.
+    #
+    # 없으면 지금과 똑같이 동작한다(잠긴 파일은 안내와 함께 실패). 프론트·백엔드가
+    # 이 필드를 보내기 시작하면 그때부터 열린다.
+    document_password: SecretStr | None = None
 
 
 # ── 자식 배열 ────────────────────────────────────────────────
