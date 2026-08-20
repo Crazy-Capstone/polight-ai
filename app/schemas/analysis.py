@@ -134,6 +134,14 @@ class AnalysisCompleteCallback(CamelModel):
     insurer_name: str | None = None
     product_name: str | None = None
 
+    # 담보 목록이 증권 보장내용 표 전체인지.
+    #
+    # 백엔드가 이 값으로 "목록에 없는 담보를 미가입으로 단정하지 않는다"는 동작을
+    # 켠다. 근거 없이 true를 보내면 파싱이 빠뜨린 담보를 "미가입"이라고 답하게 되므로,
+    # 에이전트가 명시적으로 완전하다고 한 경우만 true다. 누락·null이면 백엔드가 false로
+    # 처리하므로 보내지 않는 것과 결과가 같다.
+    coverages_complete: bool = False
+
     # 보험기간. policies.start_date/end_date가 NOT NULL이라 백엔드가 요청한 값이다.
     #
     # 증권에만 있는 정보다. 약관에는 개인 계약 조건이 없어 약관 분석일 때는 비어 있다.

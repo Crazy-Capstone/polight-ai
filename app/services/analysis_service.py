@@ -20,6 +20,7 @@ from app.schemas.analysis import (
 from app.services.analysis_errors import AnalysisFailure
 from app.services.callback_mapper import to_payload
 from app.services.certificate_adapter import (
+    coverages_complete,
     describe_structure,
     insurance_period,
     looks_like_certificate,
@@ -258,6 +259,8 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
         # policies의 NOT NULL 두 개. 증권에만 있는 값이다.
         startDate=start_date,
         endDate=end_date,
+        # 담보 목록이 표 전체인지. 폴백으로 만든 목록은 근거가 달라 켜지 않는다.
+        coveragesComplete=coverages_complete(certificate),
         rawResultJson=json.dumps(certificate, ensure_ascii=False),
     )
 

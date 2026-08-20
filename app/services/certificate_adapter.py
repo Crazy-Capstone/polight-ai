@@ -178,6 +178,108 @@ def _rows(certificate: dict, key: str) -> list[dict]:
     return rows
 
 
+# 에이전트 스키마가 바뀌어도 양쪽을 다 읽는다.
+#
+# 처음 스키마는 한화손보 증권 1건을 보고 만들어져 "연령대 2컬럼 표"를 전제했다.
+# 현대해상 증권은 단일 한도 컬럼이라 표가 통째로 비었고, 그래서 스키마를
+# 일반형으로 고쳤다(coverage_table / coverage_name / coverage_amount).
+#
+# 옛 이름을 남겨두는 이유는 두 가지다. 이미 분석한 증권의 raw_result_json이
+# 옛 형태로 저장돼 있고, Studio 설정은 되돌릴 수 있다(UPSTAGE_AGENT_CONFIG_ID를
+# 비워 최신 설정을 쓴다). 한쪽만 읽으면 그때 다시 0건이 된다.
+#
+# 앞에 있는 이름이 우선한다.
+TABLE_KEYS = ("coverage_table", "coverage_by_age_table")
+NAME_KEYS = ("coverage_name", "coverage_item_name")
+CONDITION_KEYS = ("coverage_conditions",)
+# 연령 구분이 없는 증권의 단일 한도. 대부분의 증권이 이 형태다.
+AMOUNT_KEYS = ("coverage_amount",)
+# 통화 컬럼. 새 스키마의 금액에는 단위가 없다("100,000,000").
+CURRENCY_KEYS = ("coverage_currency", "currency", "화폐")
+
+
+def _first(row: dict, keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = _clean(row.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _coverage_rows(certificate: dict) -> list[dict]:
+    """담보 표. 이름이 다른 두 스키마를 모두 받는다."""
+    for key in TABLE_KEYS:
+        rows = _rows(certificate, key)
+        if rows:
+            return rows
+    return []
+
+
+def _amount_label(row: dict, age: int) -> str:
+    """이 행의 한도 문자열.
+
+    연령대별 컬럼이 채워져 있으면 그것이 더 정확하다(그 나이에 보장하지 않으면
+    "-"로 구분된다). 비어 있으면 단일 한도 컬럼을 쓴다.
+    """
+    by_age = _clean(row.get(_amount_column(age)))
+    if by_age:
+        return by_age
+    return _first(row, AMOUNT_KEYS)
+
+
+def _row_currency(row: dict) -> str | None:
+    """행에 통화 컬럼이 있으면 읽는다.
+
+    새 스키마의 금액 문자열에는 단위가 없다("100,000,000"). 숫자만 있으면
+    원화로 보는데, 달러 담보가 그렇게 오면 5만달러가 5만원이 된다.
+    금액 문자열에 통화 표기가 있으면 그것이 우선이다 - 인쇄된 값이기 때문이다.
+    """
+    text = _first(row, CURRENCY_KEYS)
+    if not text:
+        return None
+    if any(mark in text for mark in USD_MARKS):
+        return "USD"
+    return "KRW" if "원" in text else None
+
+
+def _resolve_currency(row: dict, label: str, parsed: str | None) -> str | None:
+    """금액 문자열에 통화 표기가 없을 때만 행의 통화 컬럼을 쓴다."""
+    if parsed is None or any(mark in label for mark in USD_MARKS):
+        return parsed
+    return _row_currency(row) or parsed
+
+
+def subscriber_age(certificate: dict) -> int:
+    """피보험자 나이. 연령대별 금액 표에서 어느 컬럼을 쓸지 정한다.
+
+    없으면 성인으로 본다. 아동 증권에서 성인 컬럼을 읽으면 보장하지 않는 담보를
+    보장된다고 답하게 되지만, 나이를 모르는 채로 아동이라 가정하면 반대 사고가
+    난다. 대부분의 계약이 성인이라 그쪽을 기본으로 둔다.
+    """
+    value = certificate.get("insured_person_age")
+    if isinstance(value, bool):
+        return DEFAULT_AGE
+    if isinstance(value, int):
+        return value
+    match = re.search(r"\d+", value) if isinstance(value, str) else None
+    return int(match.group()) if match else DEFAULT_AGE
+
+
+def coverages_complete(certificate: dict) -> bool:
+    """담보 목록이 증권 보장내용 표 전체인지.
+
+    콜백의 coveragesComplete로 나가고, 백엔드에서 "목록에 없는 담보를 미가입으로
+    단정하지 않는다"는 화면·답변 동작으로 이어진다. 에이전트가 스스로 판단한
+    값이라 확신할 수 없으므로, 명시적으로 true일 때만 true로 둔다.
+
+    담보 표가 비면 false다. 그때 카드는 설명 표 폴백으로 만들어지는데, 에이전트가
+    "표 전체를 읽었다"고 한 것은 금액 표에 대한 판단이라 근거가 다르다.
+    """
+    if not _coverage_rows(certificate):
+        return False
+    return certificate.get("coverage_table_complete") is True
+
+
 def _descriptions(certificate: dict) -> dict[str, tuple[set, str]]:
     """담보 설명 표를 이름 -> (토큰, 설명)으로 만든다.
 
@@ -235,7 +337,7 @@ def _title(row: dict) -> str:
     같은 이름이 분류를 달리해 여러 번 나온다("상해"가 해외의료비에도 국내실손에도 있다).
     그대로 두면 화면에 "상해" 카드가 네 개 뜨므로 분류를 앞에 붙인다.
     """
-    name = _clean(row.get("coverage_item_name"))
+    name = _first(row, NAME_KEYS)
     level1 = _clean(row.get("coverage_category_level_1"))
     level2 = _clean(row.get("coverage_category_level_2"))
 
@@ -247,21 +349,22 @@ def _title(row: dict) -> str:
     return f"{prefix} {name}".strip()
 
 
-def to_coverages(certificate: dict, age: int = DEFAULT_AGE) -> list[CertificateCoverage]:
+def to_coverages(certificate: dict, age: int | None = None) -> list[CertificateCoverage]:
     """챗봇 프롬프트에 넣을 가입 담보 목록.
 
     RagQueryRequest.coverages로 그대로 들어간다. 여기서 "미가입"이 정확해야
     가입하지 않은 담보를 물었을 때 "보상됩니다"라는 틀린 답을 막을 수 있다.
     """
-    column = _amount_column(age)
+    age = age if age is not None else subscriber_age(certificate)
     coverages: list[CertificateCoverage] = []
 
-    for row in _rows(certificate, "coverage_by_age_table"):
+    for row in _coverage_rows(certificate):
         title = _title(row)
         if not title:
             continue
-        label = _clean(row.get(column))
+        label = _amount_label(row, age)
         amount, currency = parse_amount(label)
+        currency = _resolve_currency(row, label, currency)
         coverages.append(
             CertificateCoverage(
                 name=title,
@@ -289,23 +392,24 @@ def to_coverages(certificate: dict, age: int = DEFAULT_AGE) -> list[CertificateC
     ]
 
 
-def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemPayload]:
+def to_payloads(certificate: dict, age: int | None = None) -> list[CoverageItemPayload]:
     """화면 보장 카드. 완료 콜백의 coverageItems로 나간다.
 
     보장하지 않는 담보(연령대 컬럼이 "-")도 카드로 만든다. 화면에서 "미보장"으로
     보여주는 편이, 목록에서 빼서 사용자가 그 담보의 존재 자체를 모르는 것보다 낫다.
     """
-    column = _amount_column(age)
+    age = age if age is not None else subscriber_age(certificate)
     descriptions = _descriptions(certificate)
     payloads: list[CoverageItemPayload] = []
 
-    for row in _rows(certificate, "coverage_by_age_table"):
+    for row in _coverage_rows(certificate):
         title = _title(row)
         if not title:
             continue
 
-        label = _clean(row.get(column))
+        label = _amount_label(row, age)
         amount, currency = parse_amount(label)
+        currency = _resolve_currency(row, label, currency)
         category = _clean(row.get("coverage_category_level_1"))
 
         # 길이 컷을 거치는 이유는 약관 경로와 같다(db_limits 참고). 다만 증권
@@ -330,8 +434,12 @@ def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemP
                 ),
                 limitAmount=amount,
                 limitCurrency=cut(currency, "limit_currency"),
-                # conditions는 TEXT 컬럼이라 길이 제한이 없다
-                conditions=_find_description(row, descriptions),
+                # conditions는 TEXT 컬럼이라 길이 제한이 없다.
+                #
+                # 행에 조건이 실려 오면(새 스키마의 coverage_conditions) 그것을
+                # 쓴다. 설명 표를 토큰 겹침으로 잇는 것보다 정확하다 - 같은 행에
+                # 인쇄된 값이라 짝이 틀릴 여지가 없다.
+                conditions=_first(row, CONDITION_KEYS) or _find_description(row, descriptions),
             )
         )
 
@@ -413,10 +521,7 @@ def coverage_names(certificate: dict) -> list[str]:
     """clause_matcher에 넘길 담보명. 약관 특약을 찾는 키가 된다."""
     return [
         name
-        for name in (
-            _clean(row.get("coverage_item_name"))
-            for row in _rows(certificate, "coverage_by_age_table")
-        )
+        for name in (_first(row, NAME_KEYS) for row in _coverage_rows(certificate))
         if name
     ]
 
