@@ -226,3 +226,60 @@ def test_realistic_certificate_values_are_untouched():
     assert item.limit_label == "US 5만달러"
     assert item.title == "해외의료비 보장 상해"
     assert item.limit_currency == "USD"
+
+
+# ── 비밀번호가 걸린 파일 ─────────────────────────────────────
+
+
+# 보험사는 증권을 생년월일 6자리 같은 암호로 잠가 배포하는 경우가 많다.
+#
+# fitz.open()이 성공하고 page_count도 읽히기 때문에 라우팅을 그대로 통과한다.
+# 그러면 잠긴 파일이 Upstage까지 올라가 본문이 비고, 담보 0건 -> "증권 원본
+# 파일인지 확인해 주세요"가 나간다. 파일은 맞고 잠겨 있을 뿐이라 사용자는
+# 같은 파일을 계속 올린다.
+def make_locked_pdf(path):
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), "certificate")
+    doc.save(str(path), encryption=fitz.PDF_ENCRYPT_AES_256, user_pw="020512")
+    doc.close()
+    return path
+
+
+def test_password_protected_pdf_says_so(monkeypatch, captured, tmp_path):
+    pdf = make_locked_pdf(tmp_path / "locked.pdf")
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+
+    def never(path):
+        raise AssertionError("잠긴 파일을 Upstage에 올렸다")
+
+    monkeypatch.setattr(analysis_service, "analyze_certificate", never)
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate(BASE), repository=None
+    )
+
+    sent = captured["fail"].error_message
+    assert "비밀번호" in sent
+    assert "해제" in sent
+
+
+# 잠기지 않은 파일은 그대로 흘러가야 한다. 검사가 정상 경로를 막으면 안 된다.
+def test_unlocked_pdf_passes_through(monkeypatch, captured, tmp_path):
+    pdf = make_pdf(tmp_path / "open.pdf", pages=1)
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+    monkeypatch.setattr(
+        analysis_service, "analyze_certificate",
+        lambda path: {
+            "policy_number": "F-1",
+            "coverage_table": [
+                {"coverage_name": "상해", "coverage_amount": "100,000,000원"}
+            ],
+        },
+    )
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate(BASE), repository=None
+    )
+
+    assert "fail" not in captured
+    assert captured["complete"].coverage_items[0].limit_amount == 100_000_000

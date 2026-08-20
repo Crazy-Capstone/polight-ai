@@ -91,6 +91,34 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
     )
 
 
+def _reject_if_locked(pdf_path: Path) -> None:
+    """비밀번호가 걸린 PDF를 여기서 걸러낸다.
+
+    보험사는 증권을 생년월일 6자리 같은 암호로 잠가 배포하는 경우가 많다.
+    fitz.open()은 성공하고 page_count도 읽히기 때문에 라우팅을 그대로 통과하고,
+    잠긴 파일이 Upstage까지 올라간다. 그러면 본문이 비어 담보 0건이 되고
+    "증권 원본 파일인지 확인해 주세요"라는 엉뚱한 안내가 나간다. 파일은 맞고
+    잠겨 있을 뿐이라 사용자는 같은 파일을 계속 올린다.
+
+    암호를 추측하지 않는다. 생년월일로 열리는 경우가 많지만 그 값은 우리에게
+    없고(백엔드가 보내지 않는다), 있다고 해도 개인정보로 잠금을 푸는 일을
+    자동으로 할 것은 아니다. 사용자에게 해제를 요청하는 것이 맞다.
+    """
+    try:
+        with fitz.open(pdf_path) as doc:
+            locked = bool(doc.needs_pass)
+    except Exception as e:
+        # 열지도 못하는 것은 다른 문제다(손상·PDF 아님). 뒤 단계에서 드러난다.
+        logger.warning("PDF를 열어보지 못해 잠금 여부를 확인하지 못했습니다: %s", e)
+        return
+
+    if locked:
+        raise AnalysisFailure(
+            f"비밀번호가 걸린 PDF입니다 (documentId={pdf_path.stem})",
+            user_message="비밀번호가 설정된 파일입니다. 비밀번호를 해제한 뒤 다시 올려주세요.",
+        )
+
+
 # 화면에 노출되는 요약 문구.
 #
 # analysis_results.summary는 현재 프론트에 보이는 유일한 분석 텍스트다.
@@ -306,6 +334,9 @@ def process_analysis(
 
     try:
         pdf_path = _download_pdf(request.download_url, request.document_id)
+
+        # 약관·증권 공통. 잠긴 파일은 어느 경로로 가도 본문이 비어 있다.
+        _reject_if_locked(pdf_path)
 
         # 증권이면 여기서 끝난다. 청킹도 임베딩도 하지 않는다.
         # 증권은 화면에 뜰 담보 목록이지 챗봇이 검색할 근거가 아니다.
