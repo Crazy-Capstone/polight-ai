@@ -134,6 +134,13 @@ class AnalysisCompleteCallback(CamelModel):
     insurer_name: str | None = None
     product_name: str | None = None
 
+    # 보험기간. policies.start_date/end_date가 NOT NULL이라 백엔드가 요청한 값이다.
+    #
+    # 증권에만 있는 정보다. 약관에는 개인 계약 조건이 없어 약관 분석일 때는 비어 있다.
+    # 형식은 YYYY-MM-DD로 고정한다(certificate_adapter.insurance_period).
+    start_date: str | None = None
+    end_date: str | None = None
+
 
 # Python -> Spring: 분석 실패 콜백.
 class AnalysisFailCallback(CamelModel):
