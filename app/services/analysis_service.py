@@ -20,6 +20,7 @@ from app.schemas.analysis import (
 from app.services.analysis_errors import AnalysisFailure
 from app.services.callback_mapper import to_payload
 from app.services.certificate_adapter import (
+    coverages_complete,
     describe_structure,
     insurance_period,
     looks_like_certificate,
@@ -88,6 +89,67 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
         f"PDF를 내려받지 못했습니다 ({download_url}): {last_error}",
         user_message="문서를 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.",
     )
+
+
+# 암호가 걸린 PDF를 여기서 처리한다.
+#
+# PDF 암호는 두 종류이고, 우리에게 문제가 되는 것은 하나뿐이다.
+#
+#   권한(소유자) 암호   편집·인쇄만 제한. needs_pass=0이고 본문이 읽힌다. 그냥 통과
+#   열기(사용자) 암호   needs_pass=1. 본문을 못 읽는다. 이것만 처리 대상
+#
+# 보험사 증권에서 "보호된 문서"로 보이는 것 상당수가 권한 암호만이라 지금도
+# 정상 동작한다.
+#
+# 열기 암호는 그냥 두면 조용히 망가진다. fitz.open()이 성공하고 page_count까지
+# 읽혀 라우팅을 통과하고, 잠긴 파일이 Upstage에 올라가 본문이 빈다. 담보 0건 ->
+# "증권 원본 파일인지 확인해 주세요"가 나가는데 파일은 맞고 잠겨 있을 뿐이라
+# 사용자는 같은 파일을 계속 올린다. 매번 에이전트 호출 비용도 나간다.
+#
+# 암호를 받으면 복호화한다. 사용자가 뷰어에서 암호를 없애는 것은 유료 기능이라
+# 실질적으로 어렵지만, 사용자는 암호를 알고 있다. 파일을 고치게 하는 대신 암호만
+# 받는 편이 낫다. 추측은 하지 않는다 - 생년월일로 열리는 경우가 많아도 그 값은
+# 우리에게 없고, 있다고 해도 개인정보로 잠금을 자동으로 풀 일은 아니다.
+def _unlock_or_reject(pdf_path: Path, password: str | None) -> None:
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        # 열지도 못하는 것은 다른 문제다(손상·PDF 아님). 뒤 단계에서 드러난다.
+        logger.warning("PDF를 열어보지 못해 잠금 여부를 확인하지 못했습니다: %s", e)
+        return
+
+    unlocked: Path | None = None
+    try:
+        if not doc.needs_pass:
+            return
+
+        if not password:
+            raise AnalysisFailure(
+                f"열기 암호가 걸린 PDF인데 비밀번호가 오지 않았습니다 ({pdf_path.name})",
+                user_message=(
+                    "비밀번호가 설정된 파일입니다. 비밀번호를 입력하거나 해제한 뒤 "
+                    "다시 시도해 주세요."
+                ),
+            )
+
+        if not doc.authenticate(password):
+            # 암호를 로그에 남기지 않는다. 틀렸다는 사실만 남긴다.
+            raise AnalysisFailure(
+                f"PDF 비밀번호가 맞지 않습니다 ({pdf_path.name})",
+                user_message="비밀번호가 맞지 않습니다. 다시 확인해 주세요.",
+            )
+
+        # 복호화본을 만들어 원본 자리에 덮어쓴다. 뒤 단계와 정리 코드가 경로를
+        # 하나만 알면 되도록 파일을 늘리지 않는다.
+        unlocked = pdf_path.with_suffix(".unlocked.pdf")
+        doc.save(str(unlocked), encryption=fitz.PDF_ENCRYPT_NONE)
+    finally:
+        # 윈도우에서는 열려 있는 파일을 덮어쓸 수 없어 먼저 닫는다.
+        doc.close()
+
+    if unlocked:
+        unlocked.replace(pdf_path)
+        logger.info("잠긴 PDF를 복호화했습니다: %s", pdf_path.name)
 
 
 # 화면에 노출되는 요약 문구.
@@ -258,6 +320,8 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
         # policies의 NOT NULL 두 개. 증권에만 있는 값이다.
         startDate=start_date,
         endDate=end_date,
+        # 담보 목록이 표 전체인지. 폴백으로 만든 목록은 근거가 달라 켜지 않는다.
+        coveragesComplete=coverages_complete(certificate),
         rawResultJson=json.dumps(certificate, ensure_ascii=False),
     )
 
@@ -303,6 +367,12 @@ def process_analysis(
 
     try:
         pdf_path = _download_pdf(request.download_url, request.document_id)
+
+        # 약관·증권 공통. 잠긴 파일은 어느 경로로 가도 본문이 비어 있다.
+        _unlock_or_reject(
+            pdf_path,
+            request.document_password.get_secret_value() if request.document_password else None,
+        )
 
         # 증권이면 여기서 끝난다. 청킹도 임베딩도 하지 않는다.
         # 증권은 화면에 뜰 담보 목록이지 챗봇이 검색할 근거가 아니다.

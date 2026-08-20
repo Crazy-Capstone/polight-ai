@@ -15,6 +15,8 @@
 사용자에게는 사용자용 문구만 나간다.
 """
 
+import logging
+
 import fitz
 import pytest
 
@@ -226,3 +228,149 @@ def test_realistic_certificate_values_are_untouched():
     assert item.limit_label == "US 5만달러"
     assert item.title == "해외의료비 보장 상해"
     assert item.limit_currency == "USD"
+
+
+# ── 비밀번호가 걸린 파일 ─────────────────────────────────────
+
+
+# 보험사는 증권을 생년월일 6자리 같은 암호로 잠가 배포하는 경우가 많다.
+#
+# fitz.open()이 성공하고 page_count도 읽히기 때문에 라우팅을 그대로 통과한다.
+# 그러면 잠긴 파일이 Upstage까지 올라가 본문이 비고, 담보 0건 -> "증권 원본
+# 파일인지 확인해 주세요"가 나간다. 파일은 맞고 잠겨 있을 뿐이라 사용자는
+# 같은 파일을 계속 올린다.
+def make_locked_pdf(path, user_pw="020512"):
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), "certificate")
+    doc.save(str(path), encryption=fitz.PDF_ENCRYPT_AES_256, user_pw=user_pw)
+    doc.close()
+    return path
+
+
+def test_password_protected_pdf_says_so(monkeypatch, captured, tmp_path):
+    pdf = make_locked_pdf(tmp_path / "locked.pdf")
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+
+    def never(path):
+        raise AssertionError("잠긴 파일을 Upstage에 올렸다")
+
+    monkeypatch.setattr(analysis_service, "analyze_certificate", never)
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate(BASE), repository=None
+    )
+
+    sent = captured["fail"].error_message
+    assert "비밀번호" in sent
+    assert "해제" in sent
+
+
+# 잠기지 않은 파일은 그대로 흘러가야 한다. 검사가 정상 경로를 막으면 안 된다.
+def test_unlocked_pdf_passes_through(monkeypatch, captured, tmp_path):
+    pdf = make_pdf(tmp_path / "open.pdf", pages=1)
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+    monkeypatch.setattr(
+        analysis_service, "analyze_certificate",
+        lambda path: {
+            "policy_number": "F-1",
+            "coverage_table": [
+                {"coverage_name": "상해", "coverage_amount": "100,000,000원"}
+            ],
+        },
+    )
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate(BASE), repository=None
+    )
+
+    assert "fail" not in captured
+    assert captured["complete"].coverage_items[0].limit_amount == 100_000_000
+
+
+# 권한(소유자) 암호만 걸린 PDF는 열기가 자유롭다. needs_pass가 0이고 본문도
+# 읽힌다. 보험사 증권에서 "보호된 문서"로 보이는 것 상당수가 이 경우라,
+# 여기서 막으면 정상 증권을 거절하게 된다.
+def test_owner_password_only_is_not_blocked(monkeypatch, captured, tmp_path):
+    path = tmp_path / "owner_only.pdf"
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), "certificate")
+    doc.save(str(path), encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw="owner")
+    doc.close()
+
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: path)
+    monkeypatch.setattr(
+        analysis_service, "analyze_certificate",
+        lambda p: {"policy_number": "F-1",
+                   "coverage_table": [{"coverage_name": "상해", "coverage_amount": "1억원"}]},
+    )
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate(BASE), repository=None
+    )
+
+    assert "fail" not in captured
+
+
+# 암호를 받으면 복호화해서 진행한다. 사용자가 뷰어에서 암호를 없애는 것은
+# 유료 기능이라, 파일을 고치게 하는 대신 암호를 받는다.
+def test_password_unlocks_the_document(monkeypatch, captured, tmp_path):
+    pdf = make_locked_pdf(tmp_path / "locked.pdf")
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+
+    seen = {}
+
+    def analyze(path):
+        # 복호화된 파일이 올라가야 한다. 잠긴 채로 올리면 본문이 빈다.
+        with fitz.open(path) as doc:
+            seen["needs_pass"] = bool(doc.needs_pass)
+            seen["text"] = doc[0].get_text()
+        return {"policy_number": "F-1",
+                "coverage_table": [{"coverage_name": "상해", "coverage_amount": "1억원"}]}
+
+    monkeypatch.setattr(analysis_service, "analyze_certificate", analyze)
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate({**BASE, "documentPassword": "020512"}),
+        repository=None,
+    )
+
+    assert seen["needs_pass"] is False
+    assert "certificate" in seen["text"]
+    assert "fail" not in captured
+    assert captured["complete"].coverage_items[0].limit_amount == 100_000_000
+
+
+def test_wrong_password_says_so(monkeypatch, captured, tmp_path):
+    pdf = make_locked_pdf(tmp_path / "locked.pdf")
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+
+    def never(path):
+        raise AssertionError("잠긴 파일을 Upstage에 올렸다")
+
+    monkeypatch.setattr(analysis_service, "analyze_certificate", never)
+
+    analysis_service.process_analysis(
+        AnalysisStartRequest.model_validate({**BASE, "documentPassword": "999999"}),
+        repository=None,
+    )
+
+    assert "맞지 않습니다" in captured["fail"].error_message
+
+
+# 비밀번호가 로그·실패 사유·콜백에 섞여 나가면 안 된다.
+def test_password_never_leaves_the_server(monkeypatch, captured, tmp_path, caplog):
+    pdf = make_locked_pdf(tmp_path / "locked.pdf")
+    monkeypatch.setattr(analysis_service, "_download_pdf", lambda url, doc_id: pdf)
+    monkeypatch.setattr(
+        analysis_service, "analyze_certificate",
+        lambda p: {"policy_number": "F-1", "coverage_table": []},
+    )
+
+    request = AnalysisStartRequest.model_validate({**BASE, "documentPassword": "020512"})
+    assert "020512" not in repr(request), "SecretStr가 아니면 repr로 새어 나간다"
+
+    with caplog.at_level(logging.DEBUG):
+        analysis_service.process_analysis(request, repository=None)
+
+    assert "020512" not in caplog.text
+    assert "020512" not in captured["fail"].error_message
