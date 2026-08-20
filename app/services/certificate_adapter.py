@@ -41,6 +41,17 @@ UNITS = (("억", 100_000_000), ("만", 10_000), ("천", 1_000))
 # 통화 판정. 달러 표기가 섞여 나온다("US 5만달러").
 USD_MARKS = ("달러", "USD", "US$", "$")
 
+# 단가·비율 표현. 총 한도를 이 문자열만으로 알 수 없다.
+AMBIGUOUS_MARKS = ("1일당", "일당", "1회당", "회당", "%", "퍼센트", "가입금액의")
+
+# 금액이 채워진 비율이 이보다 낮으면 경고한다.
+#
+# 실측 기준선은 한화손보 증권의 21건/21건(100%)이다. 일부 담보가 "-"(미보장)인
+# 증권도 있으니 여유를 두되, 절반 이하로 떨어지면 표 추출이 깨진 것으로 본다.
+# 조용한 부분 실패를 잡는 것이 목적이다 - 담보 11건 중 4건만 금액이 붙어도
+# 화면은 정상으로 보인다.
+AMOUNT_FILL_WARN_RATIO = 0.5
+
 
 def parse_amount(text: str | None) -> tuple[int | None, str | None]:
     """증권의 금액 문자열을 (정수, 통화)로 바꾼다.
@@ -54,7 +65,14 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
         "(정액) 50만원"   -> (500000, "KRW")
         "-"             -> (None, None)
     """
-    if text is None:
+    if text is None or isinstance(text, bool):
+        return None, None
+
+    # 에이전트가 금액을 숫자로 주는 경우. 통화는 알 수 없어 원화로 본다.
+    if isinstance(text, (int, float)):
+        return int(text), "KRW"
+
+    if not isinstance(text, str):
         return None, None
 
     raw = text.strip()
@@ -62,6 +80,16 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
         return None, None
 
     currency = "USD" if any(m in raw for m in USD_MARKS) else "KRW"
+
+    # 단일 금액으로 환산할 수 없는 표현은 비운다.
+    #
+    # "1일당 10만원, 최대 30일"을 그대로 파싱하면 100000이 나온다. 실제 한도는
+    # 300만원인데 화면과 챗봇에 10만원으로 나간다. 자신 있게 틀리는 것이 비우는
+    # 것보다 나쁘다 - limitLabel에 원문이 남으므로 화면 표시는 그대로고,
+    # 챗봇은 금액을 단정하지 않고 증권 원문을 보라고 답한다.
+    if any(mark in raw for mark in AMBIGUOUS_MARKS):
+        logger.info("단일 한도로 환산할 수 없는 표현입니다: %r", text)
+        return None, currency
 
     # 괄호 주석("(정액)")과 통화 표기를 걷어낸다. 숫자와 단위만 남긴다.
     cleaned = re.sub(r"\([^)]*\)", "", raw)
@@ -106,9 +134,48 @@ def _amount_column(age: int) -> str:
     return "coverage_amount_age_1_14" if age <= 14 else "coverage_amount_age_15_80"
 
 
-def _clean(text: str | None) -> str:
-    """PDF에서 뽑힌 문자열은 줄바꿈 때문에 어절 사이가 벌어져 있다."""
-    return " ".join((text or "").split())
+def _clean(text: object) -> str:
+    """PDF에서 뽑힌 문자열은 줄바꿈 때문에 어절 사이가 벌어져 있다.
+
+    문자열이 아닌 값도 받는다. 에이전트가 금액을 숫자로 주는 일이 있는데,
+    여기서 막지 않으면 이 함수를 부르는 곳 전부가 AttributeError로 죽는다.
+    프롬프트로 "문자열로 주라"고 지시해도 LLM 출력이라 보장되지 않는다.
+    """
+    if text is None or isinstance(text, bool):
+        return ""
+    if not isinstance(text, str):
+        if isinstance(text, (int, float)):
+            text = str(text)
+        else:
+            return ""
+    return " ".join(text.split())
+
+
+def _rows(certificate: dict, key: str) -> list[dict]:
+    """표를 행 목록으로 꺼낸다. LLM 출력이라 타입을 믿을 수 없다.
+
+    배열 자리에 객체 하나가 오거나 null이 오는 일이 있다. 그대로 순회하면
+    문자열을 행으로 취급해 AttributeError로 죽고, 그러면 담보를 하나도 못
+    건진다. 죽는 대신 걸러내고 로그를 남긴다.
+    """
+    value = certificate.get(key)
+
+    if isinstance(value, dict):
+        logger.warning("%s가 배열이 아니라 객체입니다. 행 1건으로 처리합니다.", key)
+        return [value]
+
+    if not isinstance(value, list):
+        if value is not None:
+            logger.warning(
+                "%s가 배열이 아닙니다 (%s). 비어 있는 것으로 봅니다.",
+                key, type(value).__name__,
+            )
+        return []
+
+    rows = [row for row in value if isinstance(row, dict)]
+    if len(rows) != len(value):
+        logger.warning("%s에서 행이 아닌 항목 %d건을 걸렀습니다.", key, len(value) - len(rows))
+    return rows
 
 
 def _descriptions(certificate: dict) -> dict[str, tuple[set, str]]:
@@ -118,7 +185,7 @@ def _descriptions(certificate: dict) -> dict[str, tuple[set, str]]:
     "상해/질병 해외 의료비"). 토큰을 미리 만들어두고 겹침으로 잇는다.
     """
     table: dict[str, tuple[set, str]] = {}
-    for row in certificate.get("coverage_description_table", []):
+    for row in _rows(certificate, "coverage_description_table"):
         name = _clean(row.get("benefit_name"))
         if not name:
             continue
@@ -189,15 +256,19 @@ def to_coverages(certificate: dict, age: int = DEFAULT_AGE) -> list[CertificateC
     column = _amount_column(age)
     coverages: list[CertificateCoverage] = []
 
-    for row in certificate.get("coverage_by_age_table", []):
+    for row in _rows(certificate, "coverage_by_age_table"):
         title = _title(row)
         if not title:
             continue
-        amount, currency = parse_amount(row.get(column))
+        label = _clean(row.get(column))
+        amount, currency = parse_amount(label)
         coverages.append(
             CertificateCoverage(
                 name=title,
-                subscribed=amount is not None,
+                # 금액 파싱 성공 여부로 가입 여부를 정하지 않는다. "실손 80%"처럼
+                # 금액으로 환산할 수 없는 담보를 미가입으로 답하면, 보장되는 것을
+                # 안 된다고 말하는 셈이다. 그쪽이 더 나쁜 오답이다.
+                subscribed=label not in NOT_COVERED_MARKS,
                 limitAmount=amount,
                 limitCurrency=currency,
             )
@@ -212,7 +283,7 @@ def to_coverages(certificate: dict, age: int = DEFAULT_AGE) -> list[CertificateC
         CertificateCoverage(name=name, subscribed=True)
         for name in (
             _clean(row.get("benefit_name"))
-            for row in certificate.get("coverage_description_table") or []
+            for row in _rows(certificate, "coverage_description_table")
         )
         if name
     ]
@@ -228,7 +299,7 @@ def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemP
     descriptions = _descriptions(certificate)
     payloads: list[CoverageItemPayload] = []
 
-    for row in certificate.get("coverage_by_age_table", []):
+    for row in _rows(certificate, "coverage_by_age_table"):
         title = _title(row)
         if not title:
             continue
@@ -241,10 +312,14 @@ def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemP
         # 쪽이 더 위험하다 - 이 값들은 에이전트가 뽑은 문자열이라 길이를 우리가
         # 통제하지 못한다. 한 글자 넘치면 콜백이 500으로 세 번 튕기고 분석이
         # PROCESSING에 영구히 남는다.
+        # 금액을 못 읽은 것과 미보장은 다르다. 파싱 실패로 NOT_COVERED를 찍으면
+        # 가입한 담보가 화면에서 "미보장"으로 뜬다.
+        covered = label not in NOT_COVERED_MARKS
+
         payloads.append(
             CoverageItemPayload(
                 title=cut(title, "title"),
-                coverageStatus="COVERED" if amount is not None else "NOT_COVERED",
+                coverageStatus="COVERED" if covered else "NOT_COVERED",
                 subtitle=cut(_clean(row.get("coverage_category_level_2")) or None, "subtitle"),
                 category=cut(category or None, "category"),
                 # 원문을 그대로 둔다. "US 5만달러", "(정액) 50만원"처럼 정수로는
@@ -261,9 +336,31 @@ def to_payloads(certificate: dict, age: int = DEFAULT_AGE) -> list[CoverageItemP
         )
 
     if payloads:
+        _log_amount_fill(payloads)
         return payloads
 
     return _payloads_from_descriptions(certificate)
+
+
+def _log_amount_fill(payloads: list[CoverageItemPayload]) -> None:
+    """금액이 몇 건 채워졌는지 남긴다.
+
+    표를 통째로 못 읽으면 담보 0건으로 실패해 눈에 띈다. 그런데 절반만 읽히면
+    화면에 카드가 뜨고 아무도 빈 금액을 모른다. 조용한 부분 실패가 시끄러운
+    전체 실패보다 나쁘므로 비율을 기록한다.
+    """
+    total = len(payloads)
+    filled = sum(1 for p in payloads if p.limit_amount is not None)
+    ratio = filled / total
+
+    if ratio < AMOUNT_FILL_WARN_RATIO:
+        logger.warning(
+            "증권 담보 %d건 중 금액이 %d건(%.0f%%)뿐입니다. 에이전트의 금액 표 "
+            "추출을 확인하십시오.",
+            total, filled, ratio * 100,
+        )
+    else:
+        logger.info("증권 담보 %d건, 금액 %d건(%.0f%%)", total, filled, ratio * 100)
 
 
 # 금액 표가 비었을 때 설명 표로 카드를 만든다.
@@ -287,7 +384,7 @@ FALLBACK_LIMIT_LABEL = "한도 확인 필요"
 
 
 def _payloads_from_descriptions(certificate: dict) -> list[CoverageItemPayload]:
-    rows = certificate.get("coverage_description_table") or []
+    rows = _rows(certificate, "coverage_description_table")
     payloads: list[CoverageItemPayload] = []
 
     for row in rows:
@@ -316,7 +413,10 @@ def coverage_names(certificate: dict) -> list[str]:
     """clause_matcher에 넘길 담보명. 약관 특약을 찾는 키가 된다."""
     return [
         name
-        for name in (_clean(row.get("coverage_item_name")) for row in certificate.get("coverage_by_age_table", []))
+        for name in (
+            _clean(row.get("coverage_item_name"))
+            for row in _rows(certificate, "coverage_by_age_table")
+        )
         if name
     ]
 
