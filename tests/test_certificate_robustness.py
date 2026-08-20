@@ -189,3 +189,35 @@ def test_full_amount_fill_is_not_warned(caplog):
         to_payloads(one_row())
 
     assert not caplog.text
+
+
+# 에이전트가 통화를 ₩ 기호로 붙이는 경우. "원"만 걷어내면 이 금액을 통째로
+# 놓친다. 실측에서 현대 증권 26건 중 11건이 ₩ 표기였다.
+@pytest.mark.parametrize(
+    "text,expected",
+    [("₩200,000", 200_000), ("₩100,000,000", 100_000_000), ("₩1,400,000", 1_400_000)],
+)
+def test_won_symbol_is_read(text, expected):
+    assert parse_amount(text) == (expected, "KRW")
+
+
+# 나이 0은 나이가 아니라 "못 뽑았다"는 뜻이다. 그대로 쓰면 1~14세 컬럼을 읽어
+# 성인 담보를 미보장으로 만든다. 실측에서 한화 증권이 age=0으로 왔다.
+def test_age_zero_is_treated_as_adult():
+    from app.services.certificate_adapter import subscriber_age
+
+    certificate = {
+        "insured_person_age": 0,
+        "coverage_by_age_table": [
+            {
+                "coverage_item_name": "상해사망",
+                "coverage_amount_age_1_14": "-",
+                "coverage_amount_age_15_80": "1억원",
+            }
+        ],
+    }
+
+    assert subscriber_age(certificate) == 30
+    item = to_payloads(certificate)[0]
+    assert item.coverage_status == "COVERED"
+    assert item.limit_amount == 100_000_000

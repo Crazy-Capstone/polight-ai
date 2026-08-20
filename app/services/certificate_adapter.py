@@ -95,7 +95,7 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
     cleaned = re.sub(r"\([^)]*\)", "", raw)
     # 긴 표기를 먼저 지운다. "US"가 앞에 오면 "USD"에서 "US"만 지워져 "D"가 남고,
     # 그 뒤 숫자 변환이 실패해 금액을 통째로 놓친다("50,000 USD" -> None).
-    cleaned = re.sub(r"(USD|US\$|US|\$|달러|원|미불)", "", cleaned)
+    cleaned = re.sub(r"(USD|US\$|US|\$|₩|달러|원|미불)", "", cleaned)
     cleaned = cleaned.replace(",", "").strip()
 
     if not re.search(r"\d", cleaned):
@@ -259,12 +259,21 @@ def subscriber_age(certificate: dict) -> int:
     난다. 대부분의 계약이 성인이라 그쪽을 기본으로 둔다.
     """
     value = certificate.get("insured_person_age")
+    age = None
     if isinstance(value, bool):
+        age = None
+    elif isinstance(value, int):
+        age = value
+    elif isinstance(value, str):
+        match = re.search(r"\d+", value)
+        age = int(match.group()) if match else None
+
+    # 0이나 음수는 나이가 아니라 "못 뽑았다"는 뜻이다. 실측에서 한화 증권이
+    # age=0으로 왔는데, 이걸 그대로 쓰면 1~14세 컬럼을 읽어 성인 담보를
+    # 미보장으로 만든다. 미상일 때 성인으로 보는 이유는 _amount_column 참고.
+    if age is None or age <= 0:
         return DEFAULT_AGE
-    if isinstance(value, int):
-        return value
-    match = re.search(r"\d+", value) if isinstance(value, str) else None
-    return int(match.group()) if match else DEFAULT_AGE
+    return age
 
 
 def coverages_complete(certificate: dict) -> bool:
