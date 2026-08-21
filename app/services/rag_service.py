@@ -171,7 +171,11 @@ def answer_question(
     # 후보를 top_k보다 넓게 뽑은 뒤 MMR로 줄인다.
     # 좁게 뽑으면 반복되는 표준 조항이 자리를 다 차지해 정답이 밀려난다.
     pool = settings.top_k * settings.mmr_candidate_multiplier
-    base_scope = SearchScope(document_id=request.document_id, trip_id=request.trip_id)
+    base_scope = SearchScope(
+        terms_id=request.terms_id,
+        document_id=request.document_id,
+        trip_id=request.trip_id,
+    )
 
     # 증권에서 온 특약명이 있으면 그 조항들로 좁혀서 먼저 찾는다.
     # 요청에 실려 오지 않으면(clause_paths가 없으면) 이 블록은 통째로 건너뛰고
@@ -179,6 +183,7 @@ def answer_question(
     candidates: list[ChunkHit] = []
     if request.clause_paths:
         narrowed = SearchScope(
+            terms_id=request.terms_id,
             document_id=request.document_id,
             trip_id=request.trip_id,
             clause_paths=tuple(request.clause_paths),
