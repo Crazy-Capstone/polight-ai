@@ -27,6 +27,40 @@ from app.schemas.db_limits import cut
 from app.services.bm25 import tokenize
 from app.schemas.rag import CertificateCoverage
 
+
+# 증권 담보를 약관 규칙과 잇는 표준 카테고리(medical_expense 등)를 담보명에서 뽑는다.
+#
+# 백엔드가 coverage_items.terms_coverage_id를 채워 보장상세를 연결하는데,
+# 증권 담보명("해외의료실비보장")과 약관 규칙 title("기본형 해외여행 실손의료비")은
+# 표기가 전혀 달라 이름으로는 못 잇는다. 양쪽을 같은 표준 카테고리로 환산해 그 키로
+# 잇는다. 약관 청킹이 쓰는 category_mapping.json/ match_category를 그대로 재사용해
+# 두 경로가 같은 사전을 보게 한다.
+def _load_category_matcher():
+    import json
+    from pathlib import Path
+    from scripts.chunk_policy import build_mapping_entries, match_category
+
+    mapping_path = Path(__file__).resolve().parents[2] / "config" / "category_mapping.json"
+    with mapping_path.open(encoding="utf-8") as f:
+        entries = build_mapping_entries(json.load(f))
+    return entries, match_category
+
+
+try:
+    _CATEGORY_ENTRIES, _match_category = _load_category_matcher()
+except Exception as exc:  # 사전이 없거나 깨져도 분석은 계속돼야 한다(category만 빈다)
+    logging.getLogger(__name__).warning("category 매핑 사전 로드 실패: %s", exc)
+    _CATEGORY_ENTRIES, _match_category = [], None
+
+
+def _standard_category(title: str, agent_value: str | None) -> str | None:
+    """담보명을 표준 카테고리로 환산한다. 실패하면 에이전트 원값으로 폴백."""
+    if _match_category is not None and title:
+        hit = _match_category(title, "", _CATEGORY_ENTRIES)
+        if hit.get("matched_category"):
+            return hit["matched_category"]
+    return agent_value
+
 logger = logging.getLogger(__name__)
 
 # 성인 기준. 실제 서비스에서는 백엔드가 생년월일로 계산해 넘긴다.
@@ -421,7 +455,9 @@ def to_payloads(certificate: dict, age: int | None = None) -> list[CoverageItemP
         label = _amount_label(row, age)
         amount, currency = parse_amount(label)
         currency = _resolve_currency(row, label, currency)
-        category = _clean(row.get("coverage_category_level_1"))
+        # 담보명을 표준 카테고리로 환산해 약관 규칙과 이을 키로 쓴다.
+        # 매핑이 안 되면 에이전트 원값(coverage_category_level_1)으로 폴백.
+        category = _standard_category(title, _clean(row.get("coverage_category_level_1")))
 
         # 길이 컷을 거치는 이유는 약관 경로와 같다(db_limits 참고). 다만 증권
         # 쪽이 더 위험하다 - 이 값들은 에이전트가 뽑은 문자열이라 길이를 우리가
