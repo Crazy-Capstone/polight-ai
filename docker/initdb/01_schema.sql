@@ -44,26 +44,10 @@ CREATE TABLE trips (
     CONSTRAINT fk_trips_user_id FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE TABLE policies (
-    id UUID PRIMARY KEY,
-    user_id UUID NOT NULL,
-    trip_id UUID NOT NULL,
-    insurer_name VARCHAR(200) NOT NULL,
-    product_name VARCHAR(200) NOT NULL,
-    policy_number_encrypted VARCHAR(500),
-    display_name VARCHAR(200) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    status VARCHAR(20) NOT NULL,
-    coverage_score INTEGER,
-    coverage_count INTEGER NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_policies_user_id FOREIGN KEY (user_id) REFERENCES users(id),
-    CONSTRAINT fk_policies_trip_id FOREIGN KEY (trip_id) REFERENCES trips(id)
-);
-CREATE INDEX idx_policies_user_id ON policies(user_id);
-CREATE INDEX idx_policies_trip_id ON policies(trip_id);
+-- policies 테이블은 백엔드가 없앴다(V12). 채울 코드가 없어 policy_id가 늘 null이었고,
+-- 채우려면 정할 것(NOT NULL 불일치·display_name·status 전이·증권번호 암호화)이 많은데
+-- 그게 필요한 기능이 로드맵에 없었다. 보험 정보는 analysis_results가 갖는다.
+-- 아래 테이블들의 policy_id 컬럼은 남기고 FK만 뗐다(pg_mapper.COLUMNS 호환).
 
 CREATE TABLE policy_documents (
     id UUID PRIMARY KEY,
@@ -79,8 +63,7 @@ CREATE TABLE policy_documents (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_policy_documents_user_id FOREIGN KEY (user_id) REFERENCES users(id),
-    CONSTRAINT fk_policy_documents_trip_id FOREIGN KEY (trip_id) REFERENCES trips(id),
-    CONSTRAINT fk_policy_documents_policy_id FOREIGN KEY (policy_id) REFERENCES policies(id)
+    CONSTRAINT fk_policy_documents_trip_id FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 CREATE INDEX idx_policy_documents_user_id ON policy_documents(user_id);
 CREATE INDEX idx_policy_documents_policy_id ON policy_documents(policy_id);
@@ -177,7 +160,6 @@ CREATE TABLE analysis_results (
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT uk_analysis_results_document_id UNIQUE (document_id),
     CONSTRAINT fk_analysis_results_document_id FOREIGN KEY (document_id) REFERENCES policy_documents(id),
-    CONSTRAINT fk_analysis_results_policy_id FOREIGN KEY (policy_id) REFERENCES policies(id),
     CONSTRAINT fk_analysis_results_matched_terms_id FOREIGN KEY (matched_terms_id) REFERENCES policy_terms(id)
 );
 CREATE INDEX idx_analysis_results_policy_id ON analysis_results(policy_id);
@@ -284,7 +266,6 @@ CREATE TABLE policy_chunks (
     CONSTRAINT fk_policy_chunks_analysis_result_id FOREIGN KEY (analysis_result_id) REFERENCES analysis_results(id),
     CONSTRAINT fk_policy_chunks_user_id FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT fk_policy_chunks_trip_id FOREIGN KEY (trip_id) REFERENCES trips(id),
-    CONSTRAINT fk_policy_chunks_policy_id FOREIGN KEY (policy_id) REFERENCES policies(id),
     CONSTRAINT fk_policy_chunks_document_id FOREIGN KEY (document_id) REFERENCES policy_documents(id)
 );
 CREATE INDEX idx_policy_chunks_user_trip ON policy_chunks(user_id, trip_id);
@@ -323,8 +304,7 @@ CREATE TABLE chat_sessions (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_chat_sessions_user_id FOREIGN KEY (user_id) REFERENCES users(id),
-    CONSTRAINT fk_chat_sessions_trip_id FOREIGN KEY (trip_id) REFERENCES trips(id),
-    CONSTRAINT fk_chat_sessions_policy_id FOREIGN KEY (policy_id) REFERENCES policies(id)
+    CONSTRAINT fk_chat_sessions_trip_id FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 CREATE INDEX idx_chat_sessions_user_id ON chat_sessions(user_id);
 
