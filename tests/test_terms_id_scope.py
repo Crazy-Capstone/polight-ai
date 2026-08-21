@@ -61,3 +61,32 @@ def test_scope_key_prefers_terms_id():
 def test_terms_id_alone_is_not_empty():
     assert SearchScope(terms_id="T").is_empty() is False
     assert SearchScope().is_empty() is True
+
+
+# ── terms_id 없을 때 검색 건너뛰기 (pgvector 경로) ──────────
+
+def test_no_terms_id_skips_search_on_pg(monkeypatch):
+    """약관 못 찾은 여행(terms_id 없음)이면 검색·임베딩을 건너뛰고 근거 없음으로 답한다.
+
+    공용 약관은 terms_id로만 검색되므로, 없으면 임베딩 비용을 헛되이 쓰거나 엉뚱한
+    약관을 끌어올 이유가 없다. docs/BACKEND_REPLY_5.md 1-2 약속.
+    """
+    from app.services import rag_service
+    from app.schemas.rag import RagQueryRequest
+
+    # DATABASE_URL이 있는 상황(pgvector)을 흉내낸다
+    class S:
+        database_url = "postgresql://x"
+        top_k = 8
+        mmr_candidate_multiplier = 4
+    monkeypatch.setattr(rag_service, "get_settings", lambda: S())
+
+    called = {"embed": False}
+    monkeypatch.setattr(rag_service, "embed_query",
+                        lambda *a, **k: called.__setitem__("embed", True) or [0.0])
+
+    req = RagQueryRequest.model_validate({"userId": "u", "tripId": "t", "question": "q"})  # terms_id 없음
+    resp = rag_service.answer_question(req, repository=None)
+
+    assert resp.sources == []
+    assert called["embed"] is False, "terms_id 없으면 임베딩도 하지 않아야 한다"

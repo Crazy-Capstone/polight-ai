@@ -150,6 +150,19 @@ def answer_question(
 ) -> RagQueryResponse:
     settings = get_settings()
 
+    # 약관을 못 찾은 여행이면 terms_id가 없다(백엔드 matched_terms_id가 NONE).
+    # 공용 약관은 terms_id로만 검색되므로, 없으면 검색·임베딩을 통째로 건너뛴다.
+    # 증권 coverages는 프롬프트에 그대로 실려 "가입/미가입"은 답할 수 있지만,
+    # "약관상 면책은…"처럼 약관 근거가 필요한 답은 못 한다. 헛되이 임베딩 비용을
+    # 쓰거나 엉뚱한 약관을 끌어오는 것보다 명확히 근거 없음으로 답하는 편이 낫다.
+    # (docs/BACKEND_REPLY_5.md 1-2에서 백엔드에 약속한 동작)
+    #
+    # pgvector에서만 적용한다. 파일 저장소(평가·데모)는 terms_id 없이 document_id로
+    # 도는 기존 경로를 그대로 쓴다.
+    if settings.database_url and not request.terms_id:
+        logger.info("terms_id가 없어 약관 검색을 건너뜁니다 (tripId=%s)", request.trip_id)
+        return RagQueryResponse(answer=NO_EVIDENCE_ANSWER, sources=[])
+
     # 인자로 받은 history가 있으면 그것을 쓰고(테스트용), 없으면 요청에 실린 것을 쓴다
     turns = history if history is not None else [
         {"role": "user" if t.sender == "USER" else "assistant", "content": t.content}
