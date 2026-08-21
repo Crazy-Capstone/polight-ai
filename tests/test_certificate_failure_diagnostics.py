@@ -206,8 +206,10 @@ def test_certificate_payload_respects_length_limits():
     item = payloads[0]
     assert len(item.title) == MAX_LENGTHS["title"]
     assert len(item.subtitle) == MAX_LENGTHS["subtitle"]
-    assert len(item.category) == MAX_LENGTHS["category"]
     assert len(item.limit_label) == MAX_LENGTHS["limit_label"]
+    # category는 더 이상 에이전트 원값이 아니라 표준 어휘(짧은 코드)로 환산되거나
+    # None이라 길이 컷 대상이 아니다. 어휘 밖 긴 문자열은 여기 실리지 않는다.
+    assert item.category is None or len(item.category) <= MAX_LENGTHS["category"]
 
 
 # 자르는 것은 넘칠 때만이어야 한다. 실제 증권 값은 그대로 나가야 화면 문구가 온전하다.
