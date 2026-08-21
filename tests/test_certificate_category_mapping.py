@@ -22,9 +22,14 @@ def test_증권_담보명이_표준_카테고리로_환산된다():
         assert _standard_category(title, None) == expected, title
 
 
-def test_매핑_실패시_에이전트_원값으로_폴백():
-    # 사전에 없는 담보는 에이전트가 준 값을 그대로 쓴다(없으면 None)
-    assert _standard_category("여권분실후 재발급비용", "agent_val") == "agent_val"
+def test_category는_항상_닫힌어휘_아니면_None():
+    # 매핑 실패 시 에이전트 원값이 표준 어휘일 때만 채택, 아니면 None.
+    # category 컬럼이 어휘 밖 값으로 오염되지 않도록 조인다(백엔드 계약).
+    # 어휘 밖 한글 원값은 버린다
+    assert _standard_category("여권분실후 재발급비용", "해외여행") is None
+    # 표준 어휘 원값은 살린다(만에 하나 에이전트가 표준코드를 주면)
+    assert _standard_category("여권분실후 재발급비용", "medical_expense") == "medical_expense"
+    # 원값 없으면 None
     assert _standard_category("정체불명 담보 xyz", None) is None
 
 

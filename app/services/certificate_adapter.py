@@ -40,26 +40,38 @@ def _load_category_matcher():
     from pathlib import Path
     from scripts.chunk_policy import build_mapping_entries, match_category
 
-    mapping_path = Path(__file__).resolve().parents[2] / "config" / "category_mapping.json"
-    with mapping_path.open(encoding="utf-8") as f:
+    config_dir = Path(__file__).resolve().parents[2] / "config"
+    with (config_dir / "category_mapping.json").open(encoding="utf-8") as f:
         entries = build_mapping_entries(json.load(f))
-    return entries, match_category
+    with (config_dir / "standard_categories.json").open(encoding="utf-8") as f:
+        vocab = set(json.load(f).keys())
+    return entries, match_category, vocab
 
 
 try:
-    _CATEGORY_ENTRIES, _match_category = _load_category_matcher()
+    _CATEGORY_ENTRIES, _match_category, _STANDARD_VOCAB = _load_category_matcher()
 except Exception as exc:  # 사전이 없거나 깨져도 분석은 계속돼야 한다(category만 빈다)
     logging.getLogger(__name__).warning("category 매핑 사전 로드 실패: %s", exc)
-    _CATEGORY_ENTRIES, _match_category = [], None
+    _CATEGORY_ENTRIES, _match_category, _STANDARD_VOCAB = [], None, set()
 
 
 def _standard_category(title: str, agent_value: str | None) -> str | None:
-    """담보명을 표준 카테고리로 환산한다. 실패하면 에이전트 원값으로 폴백."""
+    """담보명을 표준 카테고리로 환산한다.
+
+    category는 백엔드가 담보<->규칙 연결의 fallback 키로 쓰므로, 닫힌 어휘
+    (standard_categories.json) 안의 값이거나 None이어야 한다. 어휘 밖 문자열을
+    실어 보내면 계약이 깨지고 백엔드에 알 수 없는 값이 쌓인다.
+
+    매핑에 걸리면 그 표준 카테고리를, 안 걸리면 에이전트 원값이 표준 어휘일
+    때만 채택한다. 에이전트 원값(coverage_category_level_1)은 보통 한글 분류라
+    어휘 밖이므로 그 경우 None으로 비운다 - 연결은 title 단계에서 시도되고,
+    category가 비어도 미연결로 안전하게 남는다.
+    """
     if _match_category is not None and title:
         hit = _match_category(title, "", _CATEGORY_ENTRIES)
         if hit.get("matched_category"):
             return hit["matched_category"]
-    return agent_value
+    return agent_value if agent_value in _STANDARD_VOCAB else None
 
 logger = logging.getLogger(__name__)
 
