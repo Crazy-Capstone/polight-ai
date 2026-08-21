@@ -26,3 +26,27 @@ def test_매핑_실패시_에이전트_원값으로_폴백():
     # 사전에 없는 담보는 에이전트가 준 값을 그대로 쓴다(없으면 None)
     assert _standard_category("여권분실후 재발급비용", "agent_val") == "agent_val"
     assert _standard_category("정체불명 담보 xyz", None) is None
+
+
+def test_category_어휘_계약_증권과_약관이_같은_닫힌집합():
+    """증권 담보 category와 약관 규칙 category는 동일한 닫힌 어휘를 써야 한다.
+
+    백엔드가 category fallback으로 담보<->규칙을 연결하므로(title 우선, category 보조),
+    양쪽 어휘가 어긋나면 연결이 조용히 실패한다. category_mapping이 뱉는 모든
+    category가 standard_categories(단일 소스) 안에 있는지 못 박는다.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "config"
+    std = set(json.loads((root / "standard_categories.json").read_text(encoding="utf-8")))
+    mapping = json.loads((root / "category_mapping.json").read_text(encoding="utf-8"))
+
+    produced = set()
+    for v in mapping.values():
+        c = v if isinstance(v, str) else v.get("primary_category")
+        if c:
+            produced.add(c)
+
+    outside = produced - std
+    assert not outside, f"category_mapping이 표준 어휘 밖의 값을 뱉음: {outside}"
