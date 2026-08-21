@@ -143,6 +143,44 @@ class TermsRepository:
         if tree["exclusions"]:
             execute_values(cur, _EXCLUSION_INSERT, tree["exclusions"])
 
+    # 규칙만 교체한다. 청크(policy_terms_chunks)는 건드리지 않는다.
+    #
+    # 약관 이관(migrate_terms_to_db)이 청크를 넣고, 규칙 적재(migrate_terms_coverages)가
+    # 나중에 규칙을 넣는다. 규칙 적재를 다시 돌려도 청크를 재삽입하지 않도록 분리했다.
+    # LLM 추출이라 재실행이 잦은데 청크까지 매번 지우고 넣으면 낭비다.
+    _DELETE_COVERAGES = """
+    DELETE FROM policy_terms_coverage_sources
+     WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+    DELETE FROM coverage_detail_items
+     WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+    DELETE FROM sub_coverage_limits
+     WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+    DELETE FROM required_documents
+     WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+    DELETE FROM exclusion_conditions
+     WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+    DELETE FROM policy_terms_coverages WHERE terms_id = %(tid)s;
+    """
+
+    def save_coverages(self, terms_id: UUID, coverage_tree: dict) -> None:
+        """약관 보장 규칙만 교체한다(청크는 그대로).
+
+        재적재 안전: 기존 규칙 트리를 지우고 다시 넣는다. 자식부터 삭제해야
+        FK 위반이 안 난다.
+        """
+        conn = self._connect()
+        try:
+            with conn, conn.cursor() as cur:
+                cur.execute(self._DELETE_COVERAGES, {"tid": terms_id})
+                if coverage_tree:
+                    self._insert_coverage_tree(cur, coverage_tree)
+            logger.info(
+                "보장 규칙 적재: terms_id=%s, 규칙 %d건",
+                terms_id, len(coverage_tree["coverages"]) if coverage_tree else 0,
+            )
+        finally:
+            conn.close()
+
     def find_verified_terms_id(self, insurer_name: str, product_name: str, revision: str | None) -> UUID | None:
         """이미 적재된 VERIFIED 약관의 id를 찾는다. 없으면 None.
 
