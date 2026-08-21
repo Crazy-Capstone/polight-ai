@@ -225,5 +225,11 @@
   },
   "식중독입원": {
     "primary_category": "medical_expense"
+  },
+  "사망": {
+    "primary_category": "death_disability"
+  },
+  "식중독": {
+    "primary_category": "medical_expense"
   }
 }
