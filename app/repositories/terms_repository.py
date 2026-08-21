@@ -143,6 +143,30 @@ class TermsRepository:
         if tree["exclusions"]:
             execute_values(cur, _EXCLUSION_INSERT, tree["exclusions"])
 
+    def find_verified_terms_id(self, insurer_name: str, product_name: str, revision: str | None) -> UUID | None:
+        """이미 적재된 VERIFIED 약관의 id를 찾는다. 없으면 None.
+
+        재적재 때 새 UUID를 만들면 (insurer, product, revision) 부분 유니크에 걸려
+        INSERT가 실패한다. 기존 id를 찾아 그 id로 DELETE 후 INSERT 하면 안전하다.
+        NULL revision은 ''로 접어 비교한다(인덱스와 같은 규칙).
+        """
+        conn = self._connect()
+        try:
+            with conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id FROM policy_terms
+                     WHERE insurer_name = %s AND product_name = %s
+                       AND COALESCE(revision, '') = COALESCE(%s, '')
+                       AND verification_status = 'VERIFIED'
+                    """,
+                    (insurer_name, product_name, revision),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+        finally:
+            conn.close()
+
     def delete_terms(self, terms_id: UUID) -> None:
         conn = self._connect()
         try:
