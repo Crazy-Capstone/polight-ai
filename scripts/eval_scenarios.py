@@ -64,8 +64,18 @@ def _norm(text: str) -> str:
 
 
 def _has(answer: str, keyword: str) -> bool:
-    """답변에 키워드가 (정규화 기준) 포함되는가."""
-    return _norm(keyword) in _norm(answer)
+    """답변에 키워드가 포함되는가.
+
+    키워드가 한 덩어리면 정규화 후 부분일치로 본다. 여러 단어로 된 키워드
+    ("4시간 이상 지연")는 답변에서 단어가 흩어져 나오는 일이 흔하므로
+    (예: "지연이 4시간 이상"), 구성 단어가 모두 있으면 포함으로 인정한다.
+    표현 차이로 정답을 놓치는 것을 막되, 무관한 답을 정답으로 인정하지는 않는다.
+    """
+    na = _norm(answer)
+    if _norm(keyword) in na:
+        return True
+    words = [w for w in keyword.split() if len(w) >= 2]
+    return len(words) >= 2 and all(_norm(w) in na for w in words)
 
 
 def score_single_select(answer: str, item: dict) -> dict:
@@ -92,14 +102,22 @@ def score_boolean_map(answer: str, item: dict) -> dict:
 
 
 def score_multi_select(answer: str, item: dict) -> dict:
-    """다중선택: 필수 항목 재현율(F1은 오검출 판정이 모호해 재현율 위주)."""
+    """다중선택: 필수 항목 재현율.
+
+    scoring_keywords는 required 항목별 동의어 맵({항목: [동의어...]})이거나
+    평면 리스트일 수 있다. 맵이면 항목별 동의어로, 리스트면 항목명 자체 + 리스트
+    전체를 후보로 써서 표현 차이를 흡수한다.
+    """
     gold = item["gold"]
     required = gold.get("required", [])
-    kw_map = item.get("scoring_keywords", {})
+    kw = item.get("scoring_keywords", {})
     found = []
     for r in required:
-        kws = kw_map.get(r, [r]) if isinstance(kw_map, dict) else [r]
-        if any(_has(answer, k) for k in kws):
+        if isinstance(kw, dict):
+            candidates = [r, *kw.get(r, [])]
+        else:  # 평면 리스트: 항목명 + 리스트 전체를 후보로
+            candidates = [r, *kw]
+        if any(_has(answer, c) for c in candidates):
             found.append(r)
     recall = len(found) / (len(required) or 1)
     missing = [r for r in required if r not in found]
