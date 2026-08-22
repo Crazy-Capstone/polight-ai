@@ -3,9 +3,11 @@
 data/eval/scenario_gold.json의 16문항을 챗봇에 던져 답을 받고, 유형별로 채점한다.
 성능 개선 전/후를 같은 평가셋으로 비교하기 위한 도구다.
 
-채점 방식(신뢰도 확보):
-  single_select / boolean_map / multi_select / numeric -> 규칙 기반 자동 채점(LLM 없음, 편향 0)
-  free_text -> LLM judge 보조(답변 모델과 다른 모델로 채점해 self-scoring 편향 제거)
+채점 방식:
+  --judge <모델> 지정 시: 전 문항을 LLM이 정답(gold) 기준으로 채점한다. 자연어 답변의
+      표현 차이를 흡수한다("공항 도착 후 바로" == "나서기 전"). 정답이 고정돼 재량이 제한된다.
+      편향이 걱정되면 답변과 다른 모델을 judge로 지정한다.
+  미지정 시: 규칙 기반 키워드 매칭(빠르지만 표현차에 약함, 명백한 객관식용).
 
 증권 가입정보(coverages)를 넣는 조건과 빼는 조건을 나눠 측정할 수 있다.
   --no-coverages : 증권 정보 없이(지금 백엔드 미전송 상태 재현)
@@ -172,13 +174,62 @@ SCORERS = {
 }
 
 
+# ── LLM 채점 ─────────────────────────────────────────────
+#
+# 규칙 기반 키워드 매칭은 자연어 답변의 표현 차이("공항 도착 후 바로" vs "나서기 전")를
+# 못 잡아, 키워드를 답변에 맞춰 늘리면 오버피팅이 된다. 대신 정답(gold)을 주고 LLM이
+# "정답 개념을 맞게 답했는지"를 판정한다. 정답이 고정돼 있어 채점자 재량이 제한된다.
+def _gold_brief(item: dict) -> str:
+    """채점 프롬프트에 넣을 정답 설명."""
+    g = item["gold"]
+    t = item["type"]
+    if t == "single_select":
+        return f"정답 선택지: {g}"
+    if t == "boolean_map":
+        return "각 항목 보상여부(O=보상/X=미보상): " + ", ".join(f"{k}={v}" for k, v in g.items())
+    if t == "multi_select":
+        return f"반드시 포함할 항목: {g.get('required')} / 포함하면 가점: {g.get('optional')}"
+    if t == "numeric":
+        return f"정답 금액: {g['gold_value']:,}원 (허용 {g['tolerance_min']:,}~{g['tolerance_max']:,}). 계산: {g.get('formula','')}"
+    if t == "free_text":
+        return f"답이 담아야 할 핵심 요소: {g.get('core_elements')}"
+    return str(g)
+
+
+def score_llm(answer: str, item: dict, judge_model: str) -> dict:
+    """LLM이 정답 기준으로 0.0~1.0 채점. 부분 정답은 부분 점수."""
+    note = item.get("note", "")
+    prompt = (
+        f"여행자보험 챗봇 답변을 채점한다.\n\n"
+        f"[질문] {item['question']}\n"
+        f"[정답 기준] {_gold_brief(item)}\n"
+        + (f"[채점 참고] {note}\n" if note else "")
+        + f"\n[챗봇 답변]\n{answer}\n\n"
+        "채점 규칙:\n"
+        "- 정답 개념을 맞게 담았으면 표현이 달라도 정답으로 인정한다.\n"
+        "- 여러 항목이면 맞은 비율로 부분 점수를 준다.\n"
+        "- 정답과 반대로 답했거나 핵심을 빠뜨리면 감점한다.\n"
+        "- 약관에 없는 절차·상식 안내는 그 자체로 감점하지 않는다(정답이면 인정).\n\n"
+        'JSON만 출력: {"score": 0.0~1.0, "reason": "한 줄 이유"}'
+    )
+    try:
+        raw, _ = generate("너는 엄격하고 공정한 채점자다. JSON만 출력한다.", prompt,
+                          provider_name=judge_model)
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        obj = json.loads(m.group()) if m else {}
+        score = float(obj.get("score", 0.0))
+        return {"score": max(0.0, min(1.0, score)), "detail": obj.get("reason", "")}
+    except Exception as e:
+        return {"score": 0.0, "detail": f"채점 실패: {str(e)[:80]}"}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="시나리오 챗봇 정확도 측정")
     parser.add_argument("--out", default=None, help="결과 저장 경로(JSON)")
     parser.add_argument("--note", default="", help="이 측정의 메모(개선 전/후 등)")
     parser.add_argument("--no-coverages", action="store_true",
                         help="증권 정보를 넣지 않는다(백엔드 미전송 상태 재현)")
-    parser.add_argument("--judge", default=None, help="서술형 LLM judge 모델(예: openai-41). 없으면 규칙만")
+    parser.add_argument("--judge", default=None, help="LLM 채점 모델(예: openai-41). 지정하면 전 문항을 LLM이 채점(표현차 흡수). 없으면 규칙 기반.")
     parser.add_argument("--repeat", type=int, default=1, help="문항당 반복 횟수(분산 확인)")
     parser.add_argument("--rescore", default=None,
                         help="저장된 결과 파일의 답변을 챗봇 재호출 없이 현재 채점으로 다시 채점")
@@ -194,7 +245,8 @@ def main() -> None:
         results = []
         for r in prev["items"]:
             item = gold_by_id[r["id"]]
-            scored = SCORERS[item["type"]](r["answer"], item, args.judge)
+            scored = (score_llm(r["answer"], item, args.judge) if args.judge
+                      else SCORERS[item["type"]](r["answer"], item, None))
             results.append({**r, "score": scored["score"], "detail": scored.get("detail"),
                             "judge_score": scored.get("judge_score", r.get("judge_score"))})
             print(f"  {r['id']:3} [{item['type']:13}] {scored['score']:.2f}")
@@ -233,7 +285,8 @@ def main() -> None:
             t0 = time.monotonic()
             resp = answer_question(req, repository=repo)
             elapsed = time.monotonic() - t0
-            scored = SCORERS[item["type"]](resp.answer, item, args.judge)
+            scored = (score_llm(resp.answer, item, args.judge) if args.judge
+                      else SCORERS[item["type"]](resp.answer, item, None))
             runs.append({"answer": resp.answer, "elapsed": elapsed, **scored})
 
         avg = sum(r["score"] for r in runs) / len(runs)
