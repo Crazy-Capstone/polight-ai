@@ -174,7 +174,11 @@ def format_contract_info(contract_info: dict | None) -> str:
         limit = item.get("limitAmount")
         currency = item.get("limitCurrency") or "원"
         limit_text = f" / 한도 {limit:,}{currency}" if isinstance(limit, int) else ""
-        lines.append(f"- {item.get('name')}: {status}{limit_text}")
+        # 담보조건(자기부담금·자기부담률·개당한도)을 함께 싣는다. 담보명에는 "(공제 20%)"가
+        # 잘려 나가므로, 이게 있어야 "자기부담률 몇 %"에 증권 기준으로 답할 수 있다.
+        cond = item.get("conditions")
+        cond_text = f" / 조건: {cond}" if cond else ""
+        lines.append(f"- {item.get('name')}: {status}{limit_text}{cond_text}")
 
     if len(lines) == 1:
         return ""
