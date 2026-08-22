@@ -180,9 +180,39 @@ def main() -> None:
                         help="증권 정보를 넣지 않는다(백엔드 미전송 상태 재현)")
     parser.add_argument("--judge", default=None, help="서술형 LLM judge 모델(예: openai-41). 없으면 규칙만")
     parser.add_argument("--repeat", type=int, default=1, help="문항당 반복 횟수(분산 확인)")
+    parser.add_argument("--rescore", default=None,
+                        help="저장된 결과 파일의 답변을 챗봇 재호출 없이 현재 채점으로 다시 채점")
     args = parser.parse_args()
 
     gold = json.loads(GOLD_PATH.read_text(encoding="utf-8"))
+
+    # 재채점 모드: 저장된 답변에 현재 채점 로직만 다시 적용한다(챗봇 재호출 없음).
+    # 답변을 고정한 채 채점 보정의 효과만 순수하게 비교할 때 쓴다.
+    if args.rescore:
+        prev = json.loads(Path(args.rescore).read_text(encoding="utf-8"))
+        gold_by_id = {it["id"]: it for it in gold["items"]}
+        results = []
+        for r in prev["items"]:
+            item = gold_by_id[r["id"]]
+            scored = SCORERS[item["type"]](r["answer"], item, args.judge)
+            results.append({**r, "score": scored["score"], "detail": scored.get("detail"),
+                            "judge_score": scored.get("judge_score", r.get("judge_score"))})
+            print(f"  {r['id']:3} [{item['type']:13}] {scored['score']:.2f}")
+        overall = sum(x["score"] for x in results) / len(results)
+        by_type: dict[str, list] = {}
+        for x in results:
+            by_type.setdefault(x["type"], []).append(x["score"])
+        print("\n" + "=" * 50)
+        print(f"전체 정확도(재채점): {overall:.3f}")
+        for t, s in sorted(by_type.items()):
+            print(f"  {t:15}: {sum(s)/len(s):.3f}  ({len(s)}문항)")
+        if args.out:
+            Path(args.out).write_text(json.dumps(
+                {"note": args.note + " (재채점)", "overall": overall,
+                 "by_type": {t: sum(s)/len(s) for t, s in by_type.items()}, "items": results},
+                ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"\n저장: {args.out}")
+        return
     repo = get_vector_repository()
     coverages = [] if args.no_coverages else DEMO_COVERAGES
 
