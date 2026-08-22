@@ -33,6 +33,10 @@ class CertificateCoverage(CamelModel):
     # 증권에 인쇄된 실제 한도. 약관에는 없는 값이라 이것이 있어야 금액을 답할 수 있다.
     limit_amount: int | None = None
     limit_currency: str | None = None
+    # 담보조건 원문(자기부담금·자기부담률·개당한도 등). 증권 담보명에는 "(공제 20%)"가
+    # 잘려 나가지만 담보조건 표에는 남아 있어, 이 값이 있어야 자기부담을 답할 수 있다.
+    # 예: "* 자기부담금 10,000 * 물품당 최대 20만원 한도"
+    conditions: str | None = None
 
 
 # POST /internal/rag/query 요청 바디
