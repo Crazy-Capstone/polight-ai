@@ -1,0 +1,66 @@
+flowchart TB
+    %% ===== 3. 챗봇 RAG (실시간) =====
+    subgraph RAG["3. AI 챗봇 — 실시간 RAG (read timeout 60s)"]
+        direction TB
+        R1["Spring → AI<br/>POST /internal/rag/query<br/>질문 · tripId · termsId · 최근 대화 6개(3턴)"]
+        R2["query_rewriter<br/>검색용 질문 재작성 (LLM)"]
+        R3["Upstage Embedding<br/>upstage-1536"]
+        R4["<b>하이브리드 검색</b><br/>pgvector 코사인 + BM25"]
+        R5["MMR reranker<br/>중복 제거 · 근거 다양성 확보"]
+        R6["prompt_builder<br/>근거 청크 + 대화 이력 프롬프트"]
+        R7["answer_providers<br/>OpenAI GPT-4.1 / Gemini / Claude<br/>(.env 한 줄로 벤더 교체)"]
+        R8["답변 + 약관 근거 반환<br/>근거 0건이면 정해진 문구로 응답"]
+        R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> R7 --> R8
+    end
+
+    %% ===== 2. 약관 색인 (운영자 사전 작업) =====
+    subgraph INGEST["2. 약관 색인 — 운영자 사전 작업 (오프라인 · 1건 4~5분)"]
+        direction TB
+        I1["약관 PDF<br/>보험사 공시자료"]
+        I2["ingest_terms.py<br/>Upstage Document Parse → 청킹 → 임베딩"]
+        I3["migrate_terms_to_db.py<br/>청크 → policy_terms_chunks"]
+        I4["migrate_terms_coverages.py<br/>coverage_extractor (LLM)<br/>면책 · 세부한도 · 청구서류 → policy_terms_coverages"]
+        I1 --> I2
+        I2 --> I3
+        I2 --> I4
+    end
+
+    %% ===== 1. 증권 분석 (사용자 업로드 · 비동기) =====
+    subgraph CERT["1. 증권 분석 — 사용자 업로드 (비동기 · 수십 초)"]
+        direction TB
+        C1["Spring → AI<br/>POST /internal/analysis<br/>analysisResultId · userId · tripId<br/>documentId · downloadUrl · documentType"]
+        C2["<b>202 Accepted</b> 즉시 응답<br/>이후 BackgroundTasks 로 계속 처리"]
+        C3["S3 Presigned GET<br/>증권 PDF 다운로드"]
+        C4["<b>Upstage Studio Agent</b><br/>파싱 → 분류 → 추출<br/>담보 · 한도 · 보험기간"]
+        C5["certificate_adapter<br/>담보 payload 변환"]
+        C6["category_mapping<br/>표준 보장 카테고리 8종 환산"]
+        C7["terms_matcher<br/>증권 ↔ 보유 약관 매칭"]
+        C8["Spring 콜백<br/>PUT /internal/analysis-results/{id}<br/>담보 목록 · 보험사 · 상품명 · 보험기간"]
+        C9["증권 PDF 삭제<br/>(피보험자 정보 · 증권번호 보호)"]
+        C1 --> C2 --> C3 --> C4 --> C5
+        C5 --> C6
+        C5 --> C7
+        C6 --> C8
+        C7 --> C8
+        C8 --> C9
+    end
+
+    %% ===== 저장소 =====
+    DB[("<b>PostgreSQL 16 + pgvector</b><br/>policy_terms_chunks<br/>policy_terms_coverages")]
+    CAT["<b>표준 보장 카테고리 8종</b><br/>의료비 · 항공지연 · 수하물 · 긴급이송<br/>치과응급 · 배상책임 · 여행취소 · 사망후유장해"]
+
+    I3 --> DB
+    I4 --> DB
+    DB --> R4
+    C6 --- CAT
+    CAT --- C7
+
+    %% ===== 스타일 (draw.io 에서 오류 나면 이 아래만 삭제) =====
+    classDef entry fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef proc fill:#F3E5F5,stroke:#7B1FA2,color:#4A148C
+    classDef vendor fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    class C1,C2,C8,C9,R1,R8 entry
+    class C5,C6,C7,I2,I3,I4,R2,R5,R6 proc
+    class C3,C4,R3,R7 vendor
+    class DB,CAT,R4,I1 store

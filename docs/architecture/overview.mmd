@@ -1,0 +1,82 @@
+flowchart LR
+    %% ===== 클라이언트 =====
+    subgraph CLIENT["Client"]
+        direction TB
+        APP["<b>Polight App</b><br/>Flutter 3.9 · Dart<br/>Web / iOS / Android 단일 코드베이스<br/>flutter_secure_storage · webview_flutter<br/>geolocator · file_picker"]
+        VERCEL["<b>Vercel</b> — Web 배포<br/>flutter build web --release<br/>vercel.json rewrite : /api/* → API 서버"]
+    end
+
+    %% ===== 클라이언트가 직접 부르는 외부 API =====
+    subgraph EXT["External API"]
+        direction TB
+        KAKAO["<b>Kakao Login</b><br/>OAuth 2.0<br/>Authorization Code"]
+        PLACES["<b>Google Places API</b><br/>searchNearby · searchText"]
+    end
+
+    %% ===== EC2 (컨테이너) =====
+    subgraph EC2["AWS EC2 · Docker Compose (polight-network)"]
+        direction TB
+        BE["<b>polight-backend</b><br/>Spring Boot 3.5.6 · Java 17<br/>Spring Security + JWT<br/>Spring Data JPA · Flyway<br/>springdoc-openapi"]
+        AI["<b>polight-ai</b><br/>FastAPI · Uvicorn · Python 3.14<br/>Pydantic · PyMuPDF<br/>내부 전용 (expose 8000)"]
+        DB[("<b>polight-postgres</b><br/>PostgreSQL 16 + pgvector")]
+    end
+
+    %% ===== AWS 관리형 서비스 =====
+    subgraph MANAGED["AWS Managed Service · ap-northeast-2"]
+        direction TB
+        S3["<b>S3</b><br/>증권 · 약관 PDF<br/>Presigned GET (15분)"]
+        ECR["<b>ECR</b><br/>polight/backend 이미지"]
+        SSM["<b>Systems Manager</b><br/>배포 명령 실행"]
+    end
+
+    %% ===== AI 벤더 =====
+    subgraph VENDOR["AI Provider"]
+        direction TB
+        UPSTAGE["<b>Upstage</b><br/>Document Parse · Studio Agent<br/>Embedding (upstage-1536)"]
+        LLM["<b>LLM</b> — .env 로 교체<br/>OpenAI GPT-4.1<br/>Google Gemini · Anthropic Claude"]
+    end
+
+    %% ===== CI/CD =====
+    subgraph CICD["CI / CD"]
+        direction TB
+        GHA["<b>GitHub Actions</b><br/>OIDC 인증 → 이미지 빌드"]
+        FEDEP["<b>deploy.sh</b><br/>flutter build web → vercel --prod"]
+    end
+
+    %% ===== 클라이언트 → 서버 =====
+    APP -->|"HTTPS"| VERCEL
+    APP -.->|"인가 코드 발급 (WebView)"| KAKAO
+    APP -.->|"주변 병원 · 대사관 검색"| PLACES
+    VERCEL -->|"/api/* reverse proxy"| BE
+    APP -.->|"모바일 빌드는 직접 호출<br/>Bearer JWT · REST"| BE
+
+    %% ===== 백엔드 =====
+    BE -->|"인가 코드 → 사용자 프로필"| KAKAO
+    BE -->|"JDBC"| DB
+    BE -->|"PDF 업로드<br/>Presigned URL 발급"| S3
+    BE -->|"POST /internal/analysis (202)<br/>POST /internal/rag/query<br/>X-Internal-Api-Key"| AI
+
+    %% ===== AI 서버 =====
+    AI -->|"분석 완료 콜백<br/>PUT /internal/analysis-results/{id}"| BE
+    AI -->|"Presigned GET 으로 PDF 수신"| S3
+    AI -->|"약관 청크 벡터 검색"| DB
+    AI -->|"파싱 · 임베딩 · 담보 추출"| UPSTAGE
+    AI -->|"답변 생성 · 보장 규칙 추출"| LLM
+
+    %% ===== 배포 =====
+    GHA -->|"push"| ECR
+    ECR -->|"pull"| SSM
+    SSM -->|"docker compose up -d"| BE
+    FEDEP --> VERCEL
+
+    %% ===== 스타일 (draw.io 에서 오류 나면 이 아래만 삭제) =====
+    classDef client fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef infra fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef ai fill:#F3E5F5,stroke:#7B1FA2,color:#4A148C
+    classDef data fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#ECEFF1,stroke:#546E7A,color:#263238
+    class APP,VERCEL client
+    class BE,ECR,SSM,S3 infra
+    class AI,UPSTAGE,LLM ai
+    class DB data
+    class KAKAO,PLACES,GHA,FEDEP ext
