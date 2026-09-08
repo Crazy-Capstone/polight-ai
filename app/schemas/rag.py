@@ -109,4 +109,20 @@ class RagQueryResponse(CamelModel):
     response_type: Literal[
         "TEXT", "HOSPITAL_CARDS", "COVERAGE_CARDS", "EMERGENCY_CONTACTS", "POLICY_SUMMARY"
     ] = "TEXT"
+
+    # 이 답변과 함께 띄우면 좋은 현지 연락처 종류. 프론트에 이미 위치기반 연락처
+    # 화면이 있어서, 어느 종류를 띄울지만 알려주면 된다. 번호는 우리가 만들지 않는다.
+    #
+    # responseType과 분리한 이유가 있다. 그쪽은 "이 메시지를 어떻게 그릴까"라서
+    # 값이 하나뿐이고 서로 배타적이다. 여기에 연락처를 접어 넣으면 두 가지가 깨진다.
+    #
+    #   섞인 답변  "도난당했는데 보상되나요"는 약관 답변과 경찰 연락처가 함께
+    #              필요하다. responseType을 EMERGENCY_CONTACTS로 바꾸면 프론트가
+    #              텍스트 대신 카드를 그릴 수 있고, 그러면 보상 설명이 사라진다
+    #   2종 이상   병원과 경찰이 동시에 필요한 경우를 값 하나로는 표현할 수 없다
+    #
+    # 그래서 responseType은 TEXT로 두고 이 필드로만 알린다. 백엔드가 이 값을
+    # 프론트까지 전달하기 전에는 빈 배열과 같아서 기존 동작이 그대로 유지된다.
+    suggested_contacts: list[Literal["HOSPITAL", "POLICE", "EMBASSY"]] = []
+
     sources: list[SourceChunk]
