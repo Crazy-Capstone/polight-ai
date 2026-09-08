@@ -28,6 +28,7 @@ from app.services.certificate_adapter import (
 )
 from app.services.certificate_analyzer import CertificateAnalysisError, analyze_certificate
 from app.services.chunking_service import parse_and_chunk
+from app.services import terms_watch
 from app.services.coverage_extractor import extract_all
 from app.services.embedding_providers import get_provider
 from app.services.embedding_service import embed_chunks
@@ -310,13 +311,24 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
             start_date, end_date,
         )
 
+    insurer_name = certificate.get("insurer_name")
+    product_name = certificate.get("product_name") or certificate.get("document_title")
+
+    # 이 증권의 약관을 우리가 갖고 있는지, 가입일에 맞는 판인지 대조해 기록한다.
+    #
+    # 약관 수집을 정기 점검으로 하면 아무 일이 없는데도 매번 전체를 훑게 된다.
+    # 사용자가 올리는 증권이 "어느 약관을 확인해야 하는가"를 알려주므로, 그때만
+    # 움직이면 된다. 판정은 로그와 data/terms_alerts.jsonl에만 남고 콜백에는
+    # 실리지 않는다 - 백엔드 계약을 바꾸지 않으려는 것이고, 이건 우리 재고 문제다.
+    terms_watch.check_certificate(insurer_name, product_name, start_date)
+
     callback = AnalysisCompleteCallback(
         analysisResultId=request.analysis_result_id,
         summary=_build_summary(payloads),
         coverageItems=payloads,
         # 백엔드가 이 둘로 약관을 찾아 연결한다.
-        insurerName=certificate.get("insurer_name"),
-        productName=certificate.get("product_name") or certificate.get("document_title"),
+        insurerName=insurer_name,
+        productName=product_name,
         # policies의 NOT NULL 두 개. 증권에만 있는 값이다.
         startDate=start_date,
         endDate=end_date,
