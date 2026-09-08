@@ -5,6 +5,7 @@ from openai import OpenAI
 from app.core.config import get_settings
 from app.repositories.base import ChunkHit, SearchScope, VectorRepository
 from app.schemas.rag import RagQueryRequest, RagQueryResponse, SourceChunk
+from app.services import terms_watch
 from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
 from app.services.embedding_service import embed_query
@@ -161,6 +162,9 @@ def answer_question(
     # 도는 기존 경로를 그대로 쓴다.
     if settings.database_url and not request.terms_id:
         logger.info("terms_id가 없어 약관 검색을 건너뜁니다 (tripId=%s)", request.trip_id)
+        # 근거 없이 답한 질의를 세어 둔다. 어느 약관이 필요한지는 요청에 없어
+        # 알 수 없지만, 이 빈도가 곧 "약관을 못 갖춰서 생기는 손해"의 크기다.
+        terms_watch.record_missing_terms_id()
         return RagQueryResponse(answer=NO_EVIDENCE_ANSWER, sources=[])
 
     # 인자로 받은 history가 있으면 그것을 쓰고(테스트용), 없으면 요청에 실린 것을 쓴다

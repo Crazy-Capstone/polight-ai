@@ -20,6 +20,9 @@ data/chunks/*
 data/parsed_results/*
 data/embeddings/*
 
+# 약관 대조 기록(terms_watch). 운영 중 쌓이는 로그다.
+data/terms_alerts.jsonl
+
 # 파서/모델을 바꿔가며 비교할 때 만드는 산출물 사본
 # (예: data/chunks_pymupdf, data/embeddings_qwen)
 data/chunks_*/
