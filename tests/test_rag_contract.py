@@ -38,8 +38,13 @@ def test_response_uses_camel_case(client, fake_repo):
     body = response.json()
     # responseType은 chat_messages.response_type(NOT NULL)에 그대로 들어간다.
     # 빠지면 Spring이 메시지를 저장할 수 없다.
-    assert set(body) == {"answer", "responseType", "sources"}
+    #
+    # suggestedContacts는 사고 정황일 때 프론트가 현지 연락처를 함께 띄우도록
+    # 실어 보내는 값이다. 백엔드가 이 값을 프론트까지 전달하기 전에는 무시되고,
+    # 빈 배열이 기존 동작과 같다(test_contact_tag.py 참고).
+    assert set(body) == {"answer", "responseType", "suggestedContacts", "sources"}
     assert body["responseType"] == "TEXT"
+    assert body["suggestedContacts"] == []
     assert set(body["sources"][0]) == {"chunkId", "documentId", "page", "quote"}
 
 

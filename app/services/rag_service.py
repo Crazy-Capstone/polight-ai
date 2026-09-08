@@ -1,4 +1,5 @@
 import logging
+import re
 
 from openai import OpenAI
 
@@ -91,6 +92,46 @@ def attach_related_chunks(hits: list[ChunkHit], repository: VectorRepository) ->
         logger.info("면책 조항 %d개를 근거에 추가했습니다.", len(related))
 
     return hits + related
+
+
+# 답변 끝에 붙은 연락처 태그를 떼어낸다.
+#
+# 사고 정황을 판단할 방법을 넷 놓고 골랐다.
+#
+#   키워드 규칙        지연 0인데 "약관에 병원 조항 있나요?"에도 붙는다
+#   별도 분류 LLM 호출  +1~2초. 챗봇은 사용자가 기다리는 화면이라 비싸다
+#   툴 콜링            answer_providers가 tools를 지원하지 않아 3벤더 추상화를 새로 짜야 한다
+#   답변 LLM에 동승     추가 호출 0. 이미 부르는 호출에 한 줄 더 얹는다  <- 이것
+#
+# 위치를 마지막 줄로 한정하지 않고 전역으로 지운다. 모델이 지시를 어겨 본문 중간에
+# 쓰는 경우가 있고, 그때 태그가 사용자 화면에 그대로 보인다.
+CONTACT_TAG = re.compile(r"\[\[\s*CONTACT\s*:\s*([A-Za-z_,\s]*)\]\]")
+
+# 태그에 없는 이름이 오면 버린다. 모델이 "AMBULANCE"처럼 스키마에 없는 값을 만들면
+# 응답 검증(Literal)에서 500이 난다. 답변은 이미 만들어졌는데 전달에 실패하는 것이
+# 가장 아깝다.
+CONTACT_KINDS = ("HOSPITAL", "POLICE", "EMBASSY")
+
+
+def split_contact_tag(answer: str) -> tuple[str, list[str]]:
+    """(태그를 지운 답변, 연락처 종류). 태그가 없으면 원문과 빈 목록."""
+    kinds: list[str] = []
+    for group in CONTACT_TAG.findall(answer):
+        for raw in group.split(","):
+            kind = raw.strip().upper()
+            if kind in CONTACT_KINDS and kind not in kinds:
+                kinds.append(kind)
+
+    clean = CONTACT_TAG.sub("", answer)
+    # 태그가 있던 자리에 남는 빈 줄과 공백을 정리한다.
+    clean = re.sub(r"[ \t]+\n", "\n", clean)
+    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
+
+    # 태그만 있고 본문이 없는 응답은 쓸 수 없다. 그럴 일은 없어야 하지만,
+    # 빈 답변을 내보내는 것보다 원문을 그대로 보내는 편이 덜 나쁘다.
+    if not clean:
+        return answer.strip(), kinds
+    return clean, kinds
 
 
 # 출처는 LLM 출력에서 뽑지 않고 실제 검색된 청크에서 만든다.
@@ -256,4 +297,16 @@ def answer_question(
     )
     answer = _call_llm(user_message, client=client)
 
-    return RagQueryResponse(answer=answer, sources=build_sources(hits))
+    # 사고 정황이면 프론트가 현지 연락처를 함께 띄우도록 종류를 실어 보낸다.
+    # responseType은 TEXT로 둔다 - 그 값을 바꾸면 프론트가 텍스트 대신 카드를
+    # 그릴 수 있고, 그러면 방금 만든 약관 답변이 사라진다. 자세한 이유는
+    # RagQueryResponse.suggested_contacts 주석.
+    answer, contacts = split_contact_tag(answer)
+    if contacts:
+        logger.info("현지 연락처 안내를 함께 보냅니다: %s", ", ".join(contacts))
+
+    return RagQueryResponse(
+        answer=answer,
+        suggested_contacts=contacts,
+        sources=build_sources(hits),
+    )
