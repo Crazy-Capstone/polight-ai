@@ -38,6 +38,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from app.core.config import get_settings
+from app.services.terms_matcher import INSURER_THRESHOLD, PRODUCT_THRESHOLD, similarity
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,34 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+# 증권의 보험사·상품명으로 보유 약관 후보를 고른다.
+#
+# 매칭(terms_matcher)과 같은 규칙을 쓴다. 규칙이 갈리면 "챗봇은 이 약관으로 답하고
+# 있는데 재고 대조는 없다고 한다" 같은 상태가 된다. 그 상태에서는 알림을 믿을 수
+# 없어, 목록을 만들어 둔 목적 자체가 사라진다.
+#
+# 글자 그대로 비교하지 않는 이유는 표기가 흔들리기 때문이다.
+#   증권 "DB손해보험(주)" / "DB손보"      약관 "DB손해보험"
+#   증권 "프로미 해외여행보험1"            약관 "프로미 해외여행보험Ⅰ"
+def _candidates(
+    insurer_name: str, product_name: str | None, held: list[dict]
+) -> tuple[list[dict], list[dict]]:
+    """(상품까지 맞는 약관, 같은 보험사 약관)."""
+    insurer_rows = [
+        r
+        for r in held
+        if similarity(insurer_name, r["insurer_name"], strip_insurer=True) >= INSURER_THRESHOLD
+    ]
+    if not product_name:
+        # 증권에서 상품명을 못 읽었다. 대조할 대상을 정할 수 없으므로 상품 후보는 비운다.
+        return [], insurer_rows
+
+    rows = [
+        r for r in insurer_rows if similarity(product_name, r["product_name"]) >= PRODUCT_THRESHOLD
+    ]
+    return rows, insurer_rows
+
+
 def _verdict(rows: list[dict], insurer_rows: list[dict], start: date | None) -> tuple[str, str]:
     """(판정, 사람이 읽을 이유)."""
     if not rows:
@@ -154,10 +183,15 @@ def check_certificate(
         from app.repositories.terms_repository import TermsRepository
 
         repo = TermsRepository(dsn)
-        insurer_rows = repo.list_verified_terms(insurer_name)
-        rows = [r for r in insurer_rows if r["product_name"] == product_name] if product_name else []
+        rows, insurer_rows = _candidates(insurer_name, product_name, repo.list_verified_terms())
 
-        verdict, reason = _verdict(rows, insurer_rows, _parse_date(start_date))
+        if insurer_rows and not product_name:
+            # 그 보험사 약관은 있는데 증권에서 상품명을 못 읽었다. 이걸 MISSING_PRODUCT로
+            # 올리면 "상품 하나만 받으면 된다"는 뜻이 되는데, 실제로는 받을 상품을
+            # 모른다. 조치 대상이 아니라 관찰 대상이다.
+            verdict, reason = UNKNOWN, "증권에서 상품명을 읽지 못해 어느 약관과 대조할지 정할 수 없습니다."
+        else:
+            verdict, reason = _verdict(rows, insurer_rows, _parse_date(start_date))
         if verdict == OK:
             return verdict
 

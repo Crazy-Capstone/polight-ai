@@ -9,11 +9,18 @@
 
 from datetime import date, timedelta
 
+import pytest
+
 from app.services import terms_watch as tw
 
 
-def held(effective: date | None, product: str = "해외여행보험") -> dict:
+def held(
+    effective: date | None,
+    product: str = "해외여행보험",
+    insurer: str = "현대해상",
+) -> dict:
     return {
+        "insurer_name": insurer,
         "product_name": product,
         "revision": effective.isoformat() if effective else None,
         "effective_date": effective,
@@ -114,3 +121,77 @@ class TestFailureIsolation:
         monkeypatch.setattr(tw, "_append", lambda record: None)
         # DSN이 가짜라 접속 자체가 실패한다. 그래도 판정만 UNKNOWN으로 돌려준다.
         assert tw.check_certificate("현대해상", "해외여행보험", "2026-03-01") == tw.UNKNOWN
+
+
+# 대조 규칙은 매칭(terms_matcher)과 같아야 한다.
+#
+# 여기가 갈리면 "챗봇은 이 약관으로 답하고 있는데 재고 대조는 없다고 한다"가 된다.
+# 알림이 오탐으로 차면 정작 봐야 할 1건이 묻히고, 목록을 만든 목적이 사라진다.
+class TestNameVariations:
+    HELD = [
+        held(date(2025, 6, 30), product="프로미 해외여행보험Ⅰ", insurer="DB손해보험"),
+        held(date(2024, 1, 1), product="해외여행보험", insurer="삼성화재"),
+    ]
+
+    # 증권은 회사명을 여러 방식으로 적는다. 전부 같은 회사로 봐야 한다.
+    @pytest.mark.parametrize("insurer", ["DB손해보험", "DB손해보험(주)", "DB손보"])
+    def test_보험사_표기가_흔들려도_보유로_본다(self, insurer):
+        rows, insurer_rows = tw._candidates(insurer, "프로미 해외여행보험Ⅰ", self.HELD)
+
+        assert len(insurer_rows) == 1
+        assert len(rows) == 1
+
+    # 로마숫자를 아라비아로 적는 증권이 있다.
+    def test_상품_표기가_흔들려도_보유로_본다(self):
+        rows, _ = tw._candidates("DB손해보험", "프로미 해외여행보험1", self.HELD)
+
+        assert len(rows) == 1
+
+    # 넓게 잡아 아무 회사나 걸리면 다른 회사 약관을 보유분으로 세게 된다.
+    def test_다른_보험사는_걸리지_않는다(self):
+        rows, insurer_rows = tw._candidates("롯데손해보험", "해외여행보험", self.HELD)
+
+        assert insurer_rows == []
+        assert rows == []
+        assert tw._verdict(rows, insurer_rows, date(2026, 3, 1))[0] == tw.MISSING_INSURER
+
+    # 회사는 맞는데 상품이 다르면 상품 누락이 맞다. 이건 조치 대상이다.
+    def test_같은_회사의_다른_상품은_상품_누락(self):
+        rows, insurer_rows = tw._candidates("DB손해보험", "프로미 운전자보험", self.HELD)
+
+        assert insurer_rows != []
+        assert rows == []
+        assert tw._verdict(rows, insurer_rows, date(2026, 3, 1))[0] == tw.MISSING_PRODUCT
+
+
+# 증권에서 상품명을 못 읽은 것과 그 상품 약관이 없는 것은 다르다.
+#
+# 앞은 받을 상품을 모르는 상태라 조치할 수 없다. MISSING_PRODUCT로 올리면
+# "상품 하나만 받으면 된다"는 뜻이 되어 목록이 거짓이 된다.
+class TestMissingProductName:
+    def test_상품명을_못_읽으면_상품_후보는_비운다(self):
+        rows, insurer_rows = tw._candidates("삼성화재", None, TestNameVariations.HELD)
+
+        assert rows == []
+        assert len(insurer_rows) == 1
+
+    def test_상품명을_못_읽으면_관찰_대상이다(self, monkeypatch):
+        recorded = {}
+        monkeypatch.setattr(
+            tw, "get_settings", lambda: type("S", (), {"database_url": "postgresql://x"})()
+        )
+        monkeypatch.setattr(tw, "_append", lambda record: recorded.update(record))
+
+        class FakeRepo:
+            def __init__(self, dsn):
+                pass
+
+            def list_verified_terms(self):
+                return TestNameVariations.HELD
+
+        import app.repositories.terms_repository as repo_module
+
+        monkeypatch.setattr(repo_module, "TermsRepository", FakeRepo)
+
+        assert tw.check_certificate("삼성화재", None, "2026-03-01") == tw.UNKNOWN
+        assert recorded["verdict"] == tw.UNKNOWN
