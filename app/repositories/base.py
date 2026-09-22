@@ -89,6 +89,13 @@ class ChunkHit:
     chunk_index: int | None = None
     clause_path: str | None = None
 
+    # 공용 약관 식별자. pgvector 경로에서만 채워진다.
+    #
+    # document_id 자리에도 같은 값이 실리지만(policy_terms_chunks는 문서가 아니라
+    # 약관에 매인다), 그 이름으로 내보내면 받는 쪽이 policy_documents를 조회하다
+    # 0건을 만난다. 응답 sources에 제 이름으로 내보내기 위해 따로 둔다.
+    terms_id: str | None = None
+
 
 # DB 경계선. 파이프라인에서 저장소를 만지는 단계는 save(색인)와 search/get_by_ids(질의)뿐이고,
 # 전부 이 인터페이스 안에 격리된다. 구현체를 갈아끼워도 호출하는 쪽 코드는 바뀌지 않는다.

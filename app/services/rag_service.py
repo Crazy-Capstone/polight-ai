@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from app.core.config import get_settings
 from app.repositories.base import ChunkHit, SearchScope, VectorRepository
+from app.schemas import db_enums
 from app.schemas.rag import RagQueryRequest, RagQueryResponse, SourceChunk
 from app.services import terms_watch
 from app.services.answer_providers import generate
@@ -139,17 +140,28 @@ def split_contact_tag(answer: str) -> tuple[str, list[str]]:
 # 근거가 조작되면 서비스 신뢰가 무너진다. 원문을 그대로 잘라 쓰면 인용의 진위가 보장된다.
 def build_sources(hits: list[ChunkHit]) -> list[SourceChunk]:
     sources = []
-    for hit in hits:
+    # 번호는 prompt_builder.format_evidence와 같은 규칙으로 매긴다. 둘이 같은 리스트를
+    # 같은 순서로 받으므로 [근거 N]과 index가 일치한다. 한쪽 정렬만 바뀌면 깨지므로
+    # 이 불변식은 test_evidence_index_matches_prompt_numbering이 지킨다.
+    for i, hit in enumerate(hits, start=1):
         quote = hit.text[:QUOTE_MAX_CHARS]
         if len(hit.text) > QUOTE_MAX_CHARS:
             quote += "..."
         sources.append(
             SourceChunk(
+                index=i,
                 chunk_id=hit.chunk_id,
                 document_id=hit.document_id,
+                terms_id=hit.terms_id,
+                section_title=hit.section_title,
                 # SourceChunk.page는 단일 int이므로 조항이 시작되는 페이지를 보낸다.
                 # 사용자가 약관에서 조항을 찾을 때 기준이 되는 페이지다.
                 page=hit.page_start,
+                page_start=hit.page_start,
+                page_end=hit.page_end,
+                # 내부값(included/excluded)을 DB·백엔드가 쓰는 어휘로 되돌린다.
+                clause_type=db_enums.clause_type(hit.coverage_type),
+                text=hit.text,
                 quote=quote,
             )
         )

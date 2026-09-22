@@ -1,6 +1,7 @@
 import pytest
 
 from app.services import rag_service
+from app.services.prompt_builder import format_evidence
 from tests.conftest import make_hit
 
 QUERY_URL = "/internal/rag/query"
@@ -45,7 +46,20 @@ def test_response_uses_camel_case(client, fake_repo):
     assert set(body) == {"answer", "responseType", "suggestedContacts", "sources"}
     assert body["responseType"] == "TEXT"
     assert body["suggestedContacts"] == []
-    assert set(body["sources"][0]) == {"chunkId", "documentId", "page", "quote"}
+    assert set(body["sources"][0]) == {
+        "index",
+        "chunkId",
+        "documentId",
+        "termsId",
+        "sectionTitle",
+        "page",
+        "pageStart",
+        "pageEnd",
+        "clauseType",
+        "text",
+        "quote",
+        "cited",
+    }
 
 
 def test_missing_required_field_returns_422(client):
@@ -117,5 +131,83 @@ def test_quote_comes_from_source_text_not_llm():
 
     assert sources[0].quote.startswith("가")
     assert sources[0].quote.endswith("...")
-    assert len(sources[0].quote) == rag_service.QUOTE_MAX_CHARS + 3
     assert sources[0].page == hit.page_start
+
+
+# quote는 잘라도 text는 자르면 안 된다. 근거 팝업에 띄울 본문이라
+# 200자에서 끊기면 사용자가 보상 조건이나 면책 사유의 뒷부분을 읽지 못한다.
+def test_text_carries_full_clause_not_truncated_quote():
+    long_text = "가" * 500
+    hit = make_hit("c1", text=long_text)
+
+    source = rag_service.build_sources([hit])[0]
+
+    assert source.text == long_text
+    assert len(source.quote) == rag_service.QUOTE_MAX_CHARS + len("...")
+
+
+# 답변의 [근거 N]과 sources[].index가 같은 번호를 가리켜야 한다.
+#
+# 이 둘은 서로 다른 함수가 매긴다(prompt_builder.format_evidence / build_sources).
+# 같은 리스트를 같은 순서로 받는다는 것이 유일한 보장이라, 한쪽 정렬이 바뀌면
+# 프론트가 엉뚱한 조항을 근거라고 띄운다. 면책 조항이 뒤에 붙어 순서가 밀리는
+# 실제 경로까지 함께 확인한다.
+def test_evidence_index_matches_prompt_numbering():
+    hits = [
+        make_hit("covered", section_title="제1조(보상하는 손해)"),
+        make_hit("excluded", coverage_type="excluded", section_title="제4조(보상하지 않는 손해)"),
+    ]
+
+    evidence = format_evidence(hits)
+    sources = rag_service.build_sources(hits)
+
+    assert [s.index for s in sources] == [1, 2]
+    for source in sources:
+        assert f"[근거 {source.index}] " in evidence
+        # 그 번호가 붙은 블록이 실제로 이 조항인지까지 본다
+        block = evidence.split(f"[근거 {source.index}] ")[1]
+        assert source.section_title in block
+
+
+# 면책 조항은 화면에서 보장 조항과 구분돼야 한다. 구분이 없으면 사용자가
+# "보상하지 않는 손해"를 보상 근거로 읽는다.
+#
+# 값은 새로 만들지 않고 policy_terms_chunks.clause_type의 어휘를 그대로 쓴다.
+def test_clause_type_uses_backend_enum_vocabulary():
+    hits = [
+        make_hit("c1", coverage_type="included"),
+        make_hit("c2", coverage_type="excluded"),
+        make_hit("c3", coverage_type="procedure"),
+    ]
+
+    sources = rag_service.build_sources(hits)
+
+    assert [s.clause_type for s in sources] == ["COVERAGE", "EXCLUSION", "PROCEDURE"]
+
+
+# 모르는 coverage_type이 와도 500이 나면 안 된다. 답변은 이미 만들어졌는데
+# 근거를 그리다 실패하는 것이 가장 아깝다.
+def test_unknown_clause_type_falls_back_instead_of_raising():
+    source = rag_service.build_sources([make_hit("c1", coverage_type="알 수 없음")])[0]
+
+    assert source.clause_type == "GENERAL"
+
+
+# 공용 약관 경로에서 document_id 자리에는 terms_id가 실린다. 그 이름 그대로
+# 내보내면 받는 쪽이 policy_documents를 조회하다 0건을 만나므로 제 이름으로도 보낸다.
+def test_terms_id_is_sent_under_its_own_name():
+    hit = make_hit("c1", document_id="terms-1")
+    hit.terms_id = "terms-1"
+
+    source = rag_service.build_sources([hit])[0]
+
+    assert source.terms_id == "terms-1"
+    assert source.document_id == "terms-1"
+
+
+# 파일 저장소(평가·데모)는 약관이 아니라 문서 단위라 terms_id가 없다.
+# 그때 null이 나가야 받는 쪽이 "약관 경로가 아니다"를 구분할 수 있다.
+def test_terms_id_is_null_when_repository_has_no_terms():
+    source = rag_service.build_sources([make_hit("c1")])[0]
+
+    assert source.terms_id is None
