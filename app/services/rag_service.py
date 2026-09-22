@@ -135,10 +135,42 @@ def split_contact_tag(answer: str) -> tuple[str, list[str]]:
     return clean, kinds
 
 
+# 답변 본문에 남은 근거 표기. 프롬프트가 [근거 N] 형식을 지시하지만 모델이 늘
+# 그대로 쓰지는 않아, 실제로 나온 형태를 평가 데이터에서 세어 보고 맞췄다.
+#
+#   [근거 1]                          대부분
+#   [근거 1, 2, 4, 8]                 숫자 나열
+#   [근거 1, 근거 2, 근거 3]           "근거" 반복
+#   [근거 1 제2조 4호, 근거 7 제2조 4호] 조항 번호가 딸려 옴  <- 함정
+#
+# 마지막 형태 때문에 "괄호 안의 숫자를 전부 뽑는" 방식을 쓸 수 없다. 그러면
+# "제2조 4호"의 2와 4까지 근거 번호로 읽혀, 인용하지도 않은 조항이 화면에 뜬다.
+# 쉼표로 끊고 조각마다 첫 숫자만 취한다 - 조항 번호는 언제나 근거 번호 뒤에 온다.
+CITATION = re.compile(r"\[\s*근거\s*([^\]]*)\]")
+
+
+def parse_cited_indexes(answer: str, total: int) -> set[int]:
+    """답변이 실제로 인용한 근거 번호. 범위를 벗어난 번호는 버린다."""
+    cited: set[int] = set()
+    for group in CITATION.findall(answer):
+        for segment in group.split(","):
+            number = re.search(r"\d+", segment)
+            if not number:
+                continue
+            index = int(number.group())
+            # 모델이 [근거 15]처럼 없는 번호를 쓰는 경우가 있다. 그대로 흘리면
+            # 프론트가 매칭되는 조항을 못 찾아 빈 팝업을 띄운다.
+            if 1 <= index <= total:
+                cited.add(index)
+    return cited
+
+
 # 출처는 LLM 출력에서 뽑지 않고 실제 검색된 청크에서 만든다.
 # LLM에게 인용문을 생성시키면 원문에 없는 문장을 만들어낼 수 있고, 보험 답변에서
 # 근거가 조작되면 서비스 신뢰가 무너진다. 원문을 그대로 잘라 쓰면 인용의 진위가 보장된다.
-def build_sources(hits: list[ChunkHit]) -> list[SourceChunk]:
+def build_sources(
+    hits: list[ChunkHit], cited_indexes: set[int] | None = None
+) -> list[SourceChunk]:
     sources = []
     # 번호는 prompt_builder.format_evidence와 같은 규칙으로 매긴다. 둘이 같은 리스트를
     # 같은 순서로 받으므로 [근거 N]과 index가 일치한다. 한쪽 정렬만 바뀌면 깨지므로
@@ -163,6 +195,7 @@ def build_sources(hits: list[ChunkHit]) -> list[SourceChunk]:
                 clause_type=db_enums.clause_type(hit.coverage_type),
                 text=hit.text,
                 quote=quote,
+                cited=i in cited_indexes if cited_indexes is not None else False,
             )
         )
     return sources
@@ -317,8 +350,17 @@ def answer_question(
     if contacts:
         logger.info("현지 연락처 안내를 함께 보냅니다: %s", ", ".join(contacts))
 
+    # 답변이 실제로 인용한 근거를 표시해 둔다.
+    #
+    # 검색 8건에 짝지어진 면책 조항이 따라붙어(attach_related_chunks) 근거가 12건까지
+    # 늘어나는데 모델은 그중 일부만 쓴다. 이 표시가 없으면 프론트가 인용되지 않은
+    # 조항까지 같은 비중으로 늘어놓게 된다.
+    #
+    # 연락처 태그를 떼어낸 뒤의 답변으로 센다. 사용자에게 보이는 글이 기준이다.
+    cited = parse_cited_indexes(answer, len(hits))
+
     return RagQueryResponse(
         answer=answer,
         suggested_contacts=contacts,
-        sources=build_sources(hits),
+        sources=build_sources(hits, cited),
     )
