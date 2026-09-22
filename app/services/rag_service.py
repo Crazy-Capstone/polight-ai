@@ -14,6 +14,7 @@ from app.services.embedding_service import embed_query
 from app.services.prompt_builder import SYSTEM_PROMPT, build_user_message
 from app.services.query_rewriter import rewrite
 from app.services.reranker import mmr_select
+from scripts.chunk_policy import is_toc_text
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,24 @@ def hybrid_search(
     return results
 
 
+# 목차 청크를 근거에서 걷어낸다.
+#
+# 청킹 단계에서 이미 거르지만(chunk_policy.drop_toc_chunks), 그전에 색인된 약관은
+# 재적재하기 전까지 DB에 그대로 남아 있다. 여기서 한 번 더 막지 않으면 그 약관을
+# 쓰는 사용자에게는 고친 것이 아무 소용이 없다.
+#
+# 목차를 근거로 주면 두 가지가 나빠진다. LLM에게는 보상 여부·조건·금액이 하나도 없는
+# 조각이 근거 자리를 차지하고, 사용자에게는 근거를 열었을 때 점선 덩어리가 보인다.
+# 실측(약관 7종 2,548청크)에서 목차 38건 중 24건에 카테고리가 붙어 있었다 -
+# 특약명이 빠짐없이 적혀 있어 "항공기 지연" 같은 질의에 걸린다.
+def drop_toc_hits(hits: list[ChunkHit]) -> list[ChunkHit]:
+    kept = [hit for hit in hits if not is_toc_text(hit.text)]
+    dropped = len(hits) - len(kept)
+    if dropped:
+        logger.info("목차 청크 %d건을 근거에서 제외했습니다 (색인된 약관의 재적재 필요)", dropped)
+    return kept
+
+
 # 검색된 보장 조항에 짝지어진 면책 조항을 끌어와 붙인다.
 #
 # 이 프로젝트 RAG의 핵심이다. "항공기 지연되면 보상되나요?" 같은 질문에서 유사도 검색은
@@ -88,7 +107,9 @@ def attach_related_chunks(hits: list[ChunkHit], repository: VectorRepository) ->
 
     # 중복 제거하되 순서는 유지
     unique = list(dict.fromkeys(wanted))
-    related = repository.get_by_ids(unique)
+    # 짝으로 끌어오는 조각도 목차일 수 있다. 여기를 안 막으면 후보 단계에서 걸러낸 것이
+    # 짝짓기를 타고 되돌아온다.
+    related = drop_toc_hits(repository.get_by_ids(unique))
     if related:
         logger.info("면책 조항 %d개를 근거에 추가했습니다.", len(related))
 
@@ -312,6 +333,10 @@ def answer_question(
 
     if not candidates:
         candidates = hybrid_search(repository, search_query, query_vector, scope=base_scope, top_k=pool)
+
+    # MMR에 넘기기 전에 걷어낸다. 뒤에서 거르면 목차가 top_k 자리를 차지한 뒤
+    # 사라져 근거 수만 줄고, 밀려난 실제 조항은 돌아오지 않는다.
+    candidates = drop_toc_hits(candidates)
 
     if not candidates:
         return RagQueryResponse(answer=NO_EVIDENCE_ANSWER, sources=[])

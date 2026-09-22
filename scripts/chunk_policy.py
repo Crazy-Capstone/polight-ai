@@ -1,9 +1,12 @@
 import argparse
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -13,6 +16,38 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "chunks"
 
 # 목차 페이지 판단 기준: 평균 줄 길이가 이 값 미만이면 목차로 간주
 TOC_AVG_LINE_LEN = 28
+
+# ── 목차 블록 판단 기준 (is_toc_text) ────────────────────────
+#
+# 페이지 단위(is_toc_page)와 별개로 필요하다. Upstage 파싱 경로는 페이지가 아니라
+# 요소를 조항 단위로 재조립하므로 페이지 판정을 걸 자리가 없고, 목차가 그대로
+# 청크가 된다. 실측에서 약관 7종 2,548청크 중 38건(1.5%)이 목차였다.
+#
+# 목차는 두 가지 모양으로 나온다. 파서가 점선을 남기면 점선 줄이 많고, 점선을
+# 지우면 조항 제목만 늘어선 짧은 줄이 남는다. 한쪽 신호만 보면 다른 쪽을 놓친다.
+#
+#   점선 남음  "제31조(회사의 파산선고와 해지)…………26"   -> 리더 줄 비율로 잡는다
+#   점선 지워짐 "제 17 조(보험계약의 성립)"                -> 조항 제목 줄 비율로 잡는다
+#
+# 줄 끝에 붙는 점선과 페이지 번호. 길이를 재기 전에 떼어낸다 - 점선이 줄 길이를
+# 131자까지 부풀려, 기존 TOC_AVG_LINE_LEN(28) 기준이 목차를 본문으로 판정한다.
+TOC_LEADER_RUN = re.compile(r"[…·∙・．.]{4,}")
+
+# "제 17 조(...)", "제3관 ...", "□ 제1장" 같은 조항 제목 줄.
+TOC_TITLE_LINE = re.compile(r"^[\s□○•\-]*제\s*\d+\s*[조관장절편](\s*의\s*\d+)?")
+
+# 목차로 보려면 줄이 이만큼은 있어야 한다. 제목만 있는 한 줄짜리 청크
+# ("제 5 조 (준용규정)")가 조항 제목 비율 1.0으로 걸리는 것을 막는다.
+TOC_MIN_LINES = 5
+
+# 점선을 떼어낸 뒤의 평균 줄 길이가 이 값 이상이면 본문이 섞인 것으로 본다.
+# 실측에서 본문 청크는 60~100자대, 목차는 10~30자대로 갈렸다.
+TOC_MAX_AVG_LINE_LEN = 40
+
+# 두 신호의 임계값. 실측 2,548청크에서 이 값으로 목차 38건이 걸리고 본문은
+# 하나도 걸리지 않았다(경계: 본문이 섞인 "주요 보험용어 해설" 0.33, 목차 최저 0.5).
+TOC_LEADER_RATIO = 0.5
+TOC_TITLE_RATIO = 0.7
 
 # 이 글자 수 미만인 chunk는 다음 chunk에 병합
 MIN_CHUNK_CHARS = 300
@@ -93,6 +128,33 @@ def is_toc_page(page: dict) -> bool:
         return True
     avg_len = sum(len(l) for l in lines) / len(lines)
     return avg_len < TOC_AVG_LINE_LEN
+
+
+# 청크 텍스트가 목차/조항 색인 블록인지.
+#
+# 목차 청크는 근거가 되지 못한다. 조항 제목만 나열돼 있어 보상 여부·조건·금액이
+# 하나도 없는데, 특약명이 빠짐없이 들어 있어 키워드 자석처럼 검색에 걸린다.
+# 실측에서 걸러진 38건 중 24건에 카테고리가 붙어 있었다(flight_delay,
+# medical_expense 등). 사용자가 근거를 열면 점선 덩어리를 보게 된다.
+def is_toc_text(text: str) -> bool:
+    raw = [line for line in text.splitlines() if line.strip()]
+    if not raw:
+        return False
+
+    leader_ratio = sum(1 for line in raw if TOC_LEADER_RUN.search(line)) / len(raw)
+
+    # 점선과 그 뒤 페이지 번호를 떼고 길이를 잰다
+    cleaned = [TOC_LEADER_RUN.sub("", line).strip().rstrip("0123456789 ").strip() for line in raw]
+    cleaned = [line for line in cleaned if line]
+    if len(cleaned) < TOC_MIN_LINES:
+        return False
+
+    avg_len = sum(len(line) for line in cleaned) / len(cleaned)
+    if avg_len >= TOC_MAX_AVG_LINE_LEN:
+        return False
+
+    title_ratio = sum(1 for line in cleaned if TOC_TITLE_LINE.match(line)) / len(cleaned)
+    return title_ratio >= TOC_TITLE_RATIO or leader_ratio >= TOC_LEADER_RATIO
 
 
 # ── 제목 탐지 ─────────────────────────────────────────────────
@@ -638,6 +700,22 @@ def create_raw_chunks_from_elements(
     return chunks
 
 
+# 목차 청크를 버린다.
+#
+# 병합(merge_small_chunks) 전에 건다. 목차는 대개 300자를 넘어 병합 대상이 아니지만,
+# 끝자락 조각이 뒤따르는 실제 조항에 붙으면 본문 청크 안에 점선 목록이 섞여 들어가
+# 그때는 걷어낼 방법이 없다.
+#
+# chunk_id는 다시 매기지 않는다. 번호에 구멍이 생기지만, 같은 약관을 다시 청킹했을 때
+# 남은 조각의 id가 그대로여야 이전 색인·평가 결과와 대조할 수 있다.
+def drop_toc_chunks(chunks: list[dict]) -> list[dict]:
+    kept = [c for c in chunks if not is_toc_text(c["text"])]
+    dropped = len(chunks) - len(kept)
+    if dropped:
+        logger.info("목차 청크 %d건을 제외했습니다 (전체 %d건)", dropped, len(chunks))
+    return kept
+
+
 # Upstage 요소로부터 최종 청크를 만든다. 재조립 이후 단계(병합/재판정/분할/면책 연결)는
 # pymupdf 경로와 완전히 동일한 도메인 로직을 그대로 태운다.
 def create_chunks_from_elements(
@@ -645,7 +723,7 @@ def create_chunks_from_elements(
     source_file: str,
     mapping_entries: list[dict],
 ) -> list[dict]:
-    raw = create_raw_chunks_from_elements(elements, source_file, mapping_entries)
+    raw = drop_toc_chunks(create_raw_chunks_from_elements(elements, source_file, mapping_entries))
     merged = merge_small_chunks(raw)
     retyped = reclassify_coverage_types(merged)
     split = split_large_chunks(retyped)
@@ -660,7 +738,7 @@ def create_chunks(
     source_file: str,
     mapping_entries: list[dict],
 ) -> list[dict]:
-    raw = create_raw_chunks(pages, source_file, mapping_entries)
+    raw = drop_toc_chunks(create_raw_chunks(pages, source_file, mapping_entries))
     merged = merge_small_chunks(raw)
     retyped = reclassify_coverage_types(merged)
     split = split_large_chunks(retyped)
