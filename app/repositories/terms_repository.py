@@ -205,41 +205,41 @@ class TermsRepository:
         finally:
             conn.close()
 
-    # 어떤 상품의 약관을 어느 개정판까지 갖고 있는지.
+    # 보유한 VERIFIED 약관 전체. 어떤 상품을 어느 개정판까지 갖고 있는지.
     #
     # find_verified_terms_id는 개정판까지 일치해야 찾는다. "이 상품 약관이 있기는
     # 한가", "우리가 가진 최신판이 언제인가"는 그것으로 답할 수 없다.
     # terms_watch가 증권과 대조할 때 쓴다.
     #
-    # product_name을 생략하면 그 보험사의 약관 전체를 돌려준다. 상품명 표기가
-    # 증권과 약관에서 다른 경우가 흔해, "회사 약관이 아예 없다"와 "회사 약관은
-    # 있는데 이 상품이 없다"를 갈라야 한다. 앞은 회사 전체 수집이 필요하고
-    # 뒤는 상품 하나만 받으면 된다.
-    def list_verified_terms(
-        self, insurer_name: str, product_name: str | None = None
-    ) -> list[dict]:
-        sql = """
-            SELECT id, product_name, revision, effective_date
-              FROM policy_terms
-             WHERE verification_status = 'VERIFIED'
-               AND insurer_name = %s
-        """
-        params: list[str] = [insurer_name]
-        if product_name:
-            sql += " AND product_name = %s"
-            params.append(product_name)
-        sql += " ORDER BY effective_date DESC NULLS LAST"
-
+    # 보험사·상품으로 좁혀 받지 않고 전체를 돌려주는 이유가 있다.
+    #
+    # 증권의 표기와 약관의 표기가 다르다. 증권에 "DB손해보험(주)"로 찍힌 것을
+    # SQL 등호로 거르면 "DB손해보험" 약관을 갖고 있는데도 없다고 판정한다. 그러면
+    # 수집을 다 해놓고도 "이 보험사 약관이 없습니다"가 계속 쌓여, 정작 봐야 할
+    # 알림이 오탐에 묻힌다.
+    #
+    # 표기 흔들림을 흡수하는 규칙은 terms_matcher에 있다. 그 규칙을 쓰려면 후보를
+    # 파이썬으로 받아야 한다. policy_terms는 보유 상품 수만큼(수십 행) 자라므로
+    # 전체를 읽어도 부담이 없다.
+    def list_verified_terms(self) -> list[dict]:
         conn = self._connect()
         try:
             with conn.cursor() as cur:
-                cur.execute(sql, tuple(params))
+                cur.execute(
+                    """
+                    SELECT id, insurer_name, product_name, revision, effective_date
+                      FROM policy_terms
+                     WHERE verification_status = 'VERIFIED'
+                     ORDER BY effective_date DESC NULLS LAST
+                    """
+                )
                 return [
                     {
                         "terms_id": row[0],
-                        "product_name": row[1],
-                        "revision": row[2],
-                        "effective_date": row[3],
+                        "insurer_name": row[1],
+                        "product_name": row[2],
+                        "revision": row[3],
+                        "effective_date": row[4],
                     }
                     for row in cur.fetchall()
                 ]

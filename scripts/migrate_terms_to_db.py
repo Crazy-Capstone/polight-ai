@@ -25,6 +25,9 @@ INSERT 한다. UPDATE 권한 없이 재적재하는 방식이다(PR #36 5절).
 
 개정판은 revision이 달라 별개 행이 된다. 구판을 지우지 않는다 - 보험은 가입 시점의
 약관이 적용되므로, 구판으로 가입한 사용자에게는 그 판으로 답해야 한다.
+
+같은 상품의 판이 둘 이상인데 시행일(effective_date)이 비어 있으면 적재를 막는다.
+백엔드가 그 값으로 판을 고르기 때문에, 비어 있으면 넣어도 연결되지 않는다.
 """
 
 import argparse
@@ -41,6 +44,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.core.config import get_settings  # noqa: E402
 from app.repositories import terms_mapper  # noqa: E402
 from app.repositories.terms_repository import TermsRepository  # noqa: E402
+from app.services.terms_matcher import normalize  # noqa: E402
 
 CHUNKS_DIR = PROJECT_ROOT / "data" / "chunks"
 EMBEDDINGS_DIR = PROJECT_ROOT / "data" / "embeddings"
@@ -91,6 +95,41 @@ def _file_hash(stem: str) -> str | None:
         for block in iter(lambda: f.read(1024 * 1024), b""):
             sha.update(block)
     return sha.hexdigest()
+
+
+# 같은 상품의 개정판이 둘 이상인데 시행일이 빈 조합을 찾는다.
+#
+# 백엔드 매칭은 상품이 맞는 약관이 여럿이면 보험 시작일과 시행일을 비교해 판을
+# 고른다. 시행일이 비어 있으면 후보를 가리지 못해 연결을 포기한다(NONE). 약관은
+# 제대로 들어갔는데 챗봇은 근거가 없다고 답하는 상태가 되고, 원인이 값 하나가
+# 비었다는 것이라 로그만 봐서는 찾기 어렵다.
+#
+# 개정판이 하나뿐이면 비어 있어도 된다. 고를 후보가 없어 비교할 일이 없다.
+# db_travel 2건이 실제로 그 경우다 - revision 없이 들어가 있고 상품명이 다르다.
+#
+# 이름은 정규화해 묶는다. 백엔드도 법인 표기·공백·괄호를 흡수해 후보를 모으므로,
+# 우리 눈에 다른 이름이어도 그쪽에서는 같은 상품의 두 판이 될 수 있다.
+def effective_date_conflicts(entries: list[dict], held: list[dict]) -> dict[tuple, dict]:
+    """{(보험사, 상품): {개정판: 시행일}} 중 판이 둘 이상이고 시행일이 빈 것."""
+    groups: dict[tuple, dict] = {}
+    for entry in entries:
+        key = (normalize(entry["insurer"]), normalize(entry["product"]))
+        revision = entry.get("revision")
+        groups.setdefault(key, {})[revision or ""] = _parse_effective_date(revision)
+
+    # 이미 DB에 있는 판도 같이 센다. 이번에 한 판만 넣어도 DB에 다른 판이 있으면
+    # 그 순간부터 후보가 둘이 된다.
+    for row in held:
+        key = (normalize(row["insurer_name"]), normalize(row["product_name"]))
+        if key not in groups:
+            continue
+        groups[key].setdefault(row["revision"] or "", row["effective_date"])
+
+    return {
+        key: revisions
+        for key, revisions in groups.items()
+        if len(revisions) >= 2 and any(d is None for d in revisions.values())
+    }
 
 
 # 레지스트리에 있는 약관을 DB에서 지운다.
@@ -181,6 +220,25 @@ def main() -> None:
             raise SystemExit(f"레지스트리에 없는 약관: {args.terms}")
 
     repo = TermsRepository(dsn)
+
+    # 넣기 전에 막는다. 넣고 나서 알면 재적재(DELETE 후 INSERT)를 해야 하는데,
+    # 그때는 그 약관을 가리키는 증권이 생겨 FK에 걸릴 수 있다.
+    conflicts = effective_date_conflicts(entries, repo.list_verified_terms())
+    if conflicts:
+        message = ["같은 상품의 개정판이 둘 이상인데 시행일이 비어 있습니다.", ""]
+        for (insurer, product), revisions in conflicts.items():
+            missing = [rev or "(개정판 표기 없음)" for rev, d in revisions.items() if d is None]
+            message.append(f"  {insurer} / {product} - 시행일 없는 판: {', '.join(missing)}")
+        message += [
+            "",
+            "백엔드 매칭은 보험 시작일과 시행일을 비교해 판을 고릅니다. 비어 있으면",
+            "후보를 가리지 못해 약관을 연결하지 않습니다(NONE). 적재해도 챗봇이 쓰지",
+            "못하므로 넣기 전에 막습니다.",
+            "",
+            "config/terms_registry.json 의 revision을 시행일(YYYY-MM-DD)로 적으면",
+            "effective_date가 자동으로 채워집니다. 시행일은 약관 표지에 있습니다.",
+        ]
+        raise SystemExit(chr(10).join(message))
 
     if args.reset:
         # 지우는 건 되돌릴 수 없다. 재적재는 안전하지만 reset은 다르므로 한 번 묻는다.
