@@ -182,9 +182,14 @@ def find_terms(
     # revision을 안 주면 EXACT로 본다. 증권에 개정일이 없는 경우가 흔한데,
     # 그때마다 "개정판이 다를 수 있다"고 알리면 경고가 무뎌진다.
     if revision and best.get("revision") and revision != best["revision"]:
-        same_product = [
-            e for e in same_insurer if _product_score(product, e) >= PRODUCT_THRESHOLD
-        ]
+        # 개정판을 다시 고를 때는 "이긴 상품과 같은 점수"만 후보로 둔다.
+        #
+        # PRODUCT_THRESHOLD(0.65)로 넓게 잡으면 다른 상품이 섞인다. 한쪽이 다른 쪽에
+        # 포함되기만 해도 0.95라, 증권의 "해외여행보험"이 "365연간해외여행보험"과
+        # 같은 상품 후보가 된다. 실제로 삼성화재 상품을 4종 등록하자 개정일이 맞는
+        # 365연간 약관이 뽑혔다. 승자 판정은 1.0과 0.95를 구분하는데 이 분기만
+        # 기준이 느슨해, 상품을 하나 추가했을 뿐인데 기존 증권의 매칭이 바뀐다.
+        same_product = [e for e in same_insurer if _product_score(product, e) >= score]
         exact = next((e for e in same_product if e.get("revision") == revision), None)
         if exact:
             return TermsMatch(
