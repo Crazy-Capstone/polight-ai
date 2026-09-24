@@ -35,78 +35,105 @@
     "보험사·상품명·시행일·terms_code는 약관 표지에서 읽어 채우므로(scripts/terms_cover.py)",
     "손으로 적을 것은 source_url 하나다."
   ],
-
   "terms": [
     {
-      "id": "db_travel",
+      "id": "db_travel_promy1",
       "insurer": "DB손해보험",
       "product": "프로미 해외여행보험Ⅰ",
-      "aliases": ["프로미 해외여행보험1", "프로미 해외여행보험", "DB 해외여행보험"],
+      "aliases": [
+        "프로미 해외여행보험1",
+        "프로미 해외여행보험",
+        "DB 해외여행보험"
+      ],
       "revision": null
     },
     {
-      "id": "db_travel_4",
+      "id": "db_travel_promy4",
       "insurer": "DB손해보험",
       "product": "프로미 해외여행보험Ⅳ",
-      "aliases": ["프로미 해외여행보험4", "프로미 해외여행보험 4형"],
+      "aliases": [
+        "프로미 해외여행보험4",
+        "프로미 해외여행보험 4형"
+      ],
       "revision": null
     },
     {
-      "id": "hyundai_travel_2022",
+      "id": "hyundai_travel_overseas_20220718",
       "insurer": "현대해상",
       "product": "해외여행보험",
-      "aliases": ["현대해상 해외여행보험", "8400-0000-20220718"],
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20220718"
+      ],
       "revision": "2022-07-18"
     },
     {
-      "id": "hyundai_travel_2025",
+      "id": "hyundai_travel_direct_20250630",
       "insurer": "현대해상",
       "product": "다이렉트 해외여행보험",
-      "aliases": ["현대해상 다이렉트 해외여행보험", "8403-0000-20250630"],
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20250630"
+      ],
       "revision": "2025-06-30"
     },
     {
-      "id": "kb_travel_2018",
+      "id": "kb_travel_overseas_20180401",
       "insurer": "KB손해보험",
       "product": "KB해외여행보험",
-      "aliases": ["KB 해외여행보험"],
+      "aliases": [
+        "KB 해외여행보험"
+      ],
       "revision": "2018-04-01"
     },
     {
-      "id": "meritz_travel",
+      "id": "meritz_travel_overseasmedical_20220801",
       "insurer": "메리츠화재",
       "product": "해외여행 실손의료보험",
-      "aliases": ["메리츠 해외여행보험", "메리츠일반-특종/상해/여행B-3-2208C"],
+      "aliases": [
+        "메리츠 해외여행보험",
+        "메리츠일반-특종/상해/여행B-3-2208C"
+      ],
       "revision": "2022-08-01"
     },
     {
-      "id": "samsung_travel_2024",
+      "id": "samsung_travel_overseas_20240101",
       "insurer": "삼성화재",
       "product": "해외여행보험",
-      "aliases": ["삼성화재 해외여행보험"],
+      "aliases": [
+        "삼성화재 해외여행보험"
+      ],
       "revision": "2024-01-01"
     },
     {
-      "id": "carrot_travel_2025",
+      "id": "carrot_travel_overseas_20250901",
       "insurer": "캐롯손해보험",
       "product": "캐롯 해외여행보험",
-      "aliases": ["캐롯 해외여행보험", "해외여행보험"],
+      "aliases": [
+        "캐롯 해외여행보험",
+        "해외여행보험"
+      ],
       "revision": "2025-09-01",
-
       "_주의": [
         "마이뱅크를 통해 판매되는 증권에 인수사가 '한화손해보험(주)'로 적혀 나온다.",
         "실물 증권과 이 약관의 담보 13종이 1:1로 대응하는 것은 확인했으나,",
         "두 회사의 인수 관계는 확인하지 못했다. 잘못 이으면 다른 회사의 약관으로",
         "보상 조건을 답하게 되므로, 확인되면 이 항목을 정리해야 한다."
       ],
-      "underwriter_aliases": ["한화손해보험", "한화손해보험(주)"]
+      "underwriter_aliases": [
+        "한화손해보험",
+        "한화손해보험(주)"
+      ]
     },
     {
-      "id": "meritz_travel_platform",
+      "id": "meritz_travel_platform_20260715",
       "insurer": "메리츠화재",
       "product": "해외여행보험(플랫폼)",
-      "aliases": ["해외여행보험", "메리츠 해외여행보험(플랫폼)"],
-      "revision": null
+      "aliases": [
+        "메리츠 해외여행보험(플랫폼)"
+      ],
+      "revision": "2026-07-15",
+      "terms_code": "메리츠일반-특종/상해/여행B-9-2607A"
     }
   ]
 }
