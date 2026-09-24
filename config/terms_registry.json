@@ -130,10 +130,12 @@
       "insurer": "메리츠화재",
       "product": "해외여행보험(플랫폼)",
       "aliases": [
-        "메리츠 해외여행보험(플랫폼)"
+        "메리츠 해외여행보험(플랫폼)",
+        "메리츠일반-특종/상해/여행B-9-2607A"
       ],
       "revision": "2026-07-15",
-      "terms_code": "메리츠일반-특종/상해/여행B-9-2607A"
+      "terms_code": "메리츠일반-특종/상해/여행B-9-2607A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do"
     },
     {
       "id": "samsung_travel_365_20260101",
@@ -407,6 +409,87 @@
       "revision": "2026-06-06",
       "terms_code": "8413-0000-20260606",
       "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_direct_20260901",
+      "insurer": "메리츠화재",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "메리츠 다이렉트 해외여행보험",
+        "메리츠일반-특종/상해/여행B-10-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-10-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseas_20260901",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험",
+      "aliases": [
+        "메리츠 해외여행보험",
+        "메리츠일반-특종/상해/여행B-1-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-1-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseasmedical_20260901",
+      "insurer": "메리츠화재",
+      "product": "해외여행 실손의료보험",
+      "aliases": [
+        "해외여행실손의료보험",
+        "메리츠 해외여행 실손의료보험",
+        "메리츠일반-특종/상해/여행B-3-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-3-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_platform_20260901",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험(플랫폼)",
+      "aliases": [
+        "메리츠 해외여행보험(플랫폼)",
+        "메리츠일반-특종/상해/여행B-9-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-9-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseas4_20260715",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험Ⅳ",
+      "aliases": [
+        "해외여행보험4",
+        "메리츠 해외여행보험Ⅳ",
+        "메리츠일반-특종/상해/여행B-6-2607A"
+      ],
+      "revision": "2026-07-15",
+      "terms_code": "메리츠일반-특종/상해/여행B-6-2607A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseas5_20260715",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험Ⅴ",
+      "aliases": [
+        "해외여행보험5",
+        "메리츠 해외여행보험Ⅴ",
+        "메리츠일반-특종/상해/여행B-7-2607A"
+      ],
+      "revision": "2026-07-15",
+      "terms_code": "메리츠일반-특종/상해/여행B-7-2607A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
       "collected_at": "2026-09-24"
     }
   ]
