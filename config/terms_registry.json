@@ -229,6 +229,185 @@
       "revision": "2026-06-06",
       "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
       "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_direct_20260101",
+      "insurer": "현대해상",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8403-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_direct_20260606",
+      "insurer": "현대해상",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8403-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_direct_20260825",
+      "insurer": "현대해상",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20260825"
+      ],
+      "revision": "2026-08-25",
+      "terms_code": "8403-0000-20260825",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas_20260101",
+      "insurer": "현대해상",
+      "product": "해외여행보험",
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8400-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas_20260606",
+      "insurer": "현대해상",
+      "product": "해외여행보험",
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8400-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas_20260825",
+      "insurer": "현대해상",
+      "product": "해외여행보험",
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20260825"
+      ],
+      "revision": "2026-08-25",
+      "terms_code": "8400-0000-20260825",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260101",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8405-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260321",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260321"
+      ],
+      "revision": "2026-03-21",
+      "terms_code": "8405-0000-20260321",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260606",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8405-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260825",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260811"
+      ],
+      "revision": "2026-08-25",
+      "terms_code": "8405-0000-20260811",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24",
+      "_주의": [
+        "약관 표지의 시행일은 2026-08-11인데 공시실 판매개시일은 2026-08-25다.",
+        "revision에는 판매개시일을 넣었다. 이 값으로 고르는 것은 '어느 판으로",
+        "가입했는가'이고, 8월 20일 가입자에게는 아직 이전 판(2026-06-06)이",
+        "적용되기 때문이다. 시행일은 terms_code 끝 8자리에 그대로 남아 있다."
+      ]
+    },
+    {
+      "id": "hyundai_travel_platform_20251001",
+      "insurer": "현대해상",
+      "product": "해외여행보험(플랫폼전용)",
+      "aliases": [
+        "해외여행보험(플랫폼 전용)",
+        "8413-0000-20251001"
+      ],
+      "revision": "2025-10-01",
+      "terms_code": "8413-0000-20251001",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_platform_20260101",
+      "insurer": "현대해상",
+      "product": "해외여행보험(플랫폼전용)",
+      "aliases": [
+        "해외여행보험(플랫폼 전용)",
+        "8413-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8413-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_platform_20260606",
+      "insurer": "현대해상",
+      "product": "해외여행보험(플랫폼전용)",
+      "aliases": [
+        "해외여행보험(플랫폼 전용)",
+        "8413-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8413-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
     }
   ]
 }
