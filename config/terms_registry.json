@@ -134,6 +134,101 @@
       ],
       "revision": "2026-07-15",
       "terms_code": "메리츠일반-특종/상해/여행B-9-2607A"
+    },
+    {
+      "id": "samsung_travel_365_20260101",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행보험",
+      "aliases": [
+        "365연간 해외여행보험",
+        "삼성화재 365연간해외여행보험"
+      ],
+      "revision": "2026-01-01",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365_20260205",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행보험",
+      "aliases": [
+        "365연간 해외여행보험",
+        "삼성화재 365연간해외여행보험"
+      ],
+      "revision": "2026-02-05",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365_20260606",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행보험",
+      "aliases": [
+        "365연간 해외여행보험",
+        "삼성화재 365연간해외여행보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365medical_20260101",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행실손의료비보험",
+      "aliases": [
+        "365연간 해외여행실손의료비보험",
+        "삼성화재 365연간해외여행실손의료비보험"
+      ],
+      "revision": "2026-01-01",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365medical_20260606",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행실손의료비보험",
+      "aliases": [
+        "365연간 해외여행실손의료비보험",
+        "삼성화재 365연간해외여행실손의료비보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_overseas_20260606",
+      "insurer": "삼성화재",
+      "product": "해외여행보험",
+      "aliases": [
+        "삼성화재 해외여행보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_overseasmedical_20260101",
+      "insurer": "삼성화재",
+      "product": "해외여행 실손의료보험",
+      "aliases": [
+        "해외여행실손의료보험",
+        "삼성화재 해외여행 실손의료보험"
+      ],
+      "revision": "2026-01-01",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_overseasmedical_20260606",
+      "insurer": "삼성화재",
+      "product": "해외여행 실손의료보험",
+      "aliases": [
+        "해외여행실손의료보험",
+        "삼성화재 해외여행 실손의료보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
     }
   ]
 }
