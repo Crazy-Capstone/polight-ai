@@ -45,7 +45,11 @@
         "프로미 해외여행보험",
         "DB 해외여행보험"
       ],
-      "revision": null
+      "revision": null,
+      "underwriter_aliases": [
+        "디비손해보험",
+        "동부화재"
+      ]
     },
     {
       "id": "db_travel_promy4",
@@ -55,7 +59,11 @@
         "프로미 해외여행보험4",
         "프로미 해외여행보험 4형"
       ],
-      "revision": null
+      "revision": null,
+      "underwriter_aliases": [
+        "디비손해보험",
+        "동부화재"
+      ]
     },
     {
       "id": "hyundai_travel_overseas_20220718",
@@ -84,7 +92,10 @@
       "aliases": [
         "KB 해외여행보험"
       ],
-      "revision": "2018-04-01"
+      "revision": "2018-04-01",
+      "underwriter_aliases": [
+        "케이비손해보험"
+      ]
     },
     {
       "id": "meritz_travel_overseasmedical_20220801",

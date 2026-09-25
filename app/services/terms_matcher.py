@@ -35,6 +35,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -135,6 +136,58 @@ def _product_score(product: str, entry: dict) -> float:
     return max(similarity(product, c) for c in candidates)
 
 
+# 증권에 적힌 회사와 약관을 낸 회사가 다를 수 있다.
+#
+# 제휴 판매에서는 증권에 인수사가 따로 표기된다. 실제로 마이뱅크가 파는 상품의
+# 증권에는 "한화손해보험(주)"가 적혀 있는데 약관은 캐롯 해외여행보험이었다.
+# 회사명만 비교하면 NONE이 나와, 담보가 다 대응하는 약관을 두고도 못 쓴다.
+def same_insurer_entries(insurer: str, entries: list[dict]) -> list[dict]:
+    def matches(entry: dict) -> bool:
+        names = [entry["insurer"], *entry.get("underwriter_aliases", [])]
+        return any(similarity(insurer, n, strip_insurer=True) >= INSURER_THRESHOLD for n in names)
+
+    return [e for e in entries if matches(e)]
+
+
+def _revision_date(entry: dict) -> date | None:
+    """개정판 표기를 날짜로. YYYY-MM-DD가 아니면 비교에서 뺀다."""
+    value = entry.get("effective_date") or entry.get("revision")
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+# 가입일에 유효했던 판을 고른다.
+#
+# 개정판이 여럿일 때 "레지스트리에 먼저 적힌 것"을 주면 안 된다. 보험은 가입 시점의
+# 약관이 적용되므로, 시행일이 가입일 이하인 판 중 가장 최근 것이 맞다.
+#
+# 가입일보다 앞선 판이 하나도 없으면 우리가 그 시점 판을 갖고 있지 않다는 뜻이다.
+# 그때는 가장 오래된 판을 주되 REVISION으로 알린다 - 조용히 다른 판으로 답하면
+# 사용자가 틀린 조건을 믿게 된다.
+def pick_revision(entries: list[dict], start: date | None) -> tuple[dict, str]:
+    """(고른 약관, 판정). 판정은 EXACT 또는 REVISION."""
+    dated = [(d, e) for e in entries if (d := _revision_date(e))]
+    if not dated:
+        # 시행일을 아는 판이 없다. 고를 근거가 없으니 첫 번째를 그대로 쓴다.
+        return entries[0], "EXACT"
+
+    dated.sort(key=lambda pair: pair[0])
+    if start is None:
+        # 가입일을 모르면 최신판이 가장 나은 추정이다.
+        return dated[-1][1], "EXACT"
+
+    valid = [e for d, e in dated if d <= start]
+    if valid:
+        return valid[-1], "EXACT"
+
+    logger.info("가입일(%s) 시점 판이 없어 가장 오래된 판을 씁니다: %s", start, dated[0][1]["product"])
+    return dated[0][1], "REVISION"
+
+
 def find_terms(
     insurer: str,
     product: str,
@@ -144,16 +197,7 @@ def find_terms(
     """증권의 보험사·상품명으로 약관을 고른다. 못 찾아도 예외를 내지 않고 NONE을 돌려준다."""
     entries = registry if registry is not None else load_registry()
 
-    # 증권에 적힌 회사와 약관을 낸 회사가 다를 수 있다.
-    #
-    # 제휴 판매에서는 증권에 인수사가 따로 표기된다. 실제로 마이뱅크가 파는 상품의
-    # 증권에는 "한화손해보험(주)"가 적혀 있는데 약관은 캐롯 해외여행보험이었다.
-    # 회사명만 비교하면 NONE이 나와, 담보가 다 대응하는 약관을 두고도 못 쓴다.
-    def matches_insurer(entry: dict) -> bool:
-        names = [entry["insurer"], *entry.get("underwriter_aliases", [])]
-        return any(similarity(insurer, n, strip_insurer=True) >= INSURER_THRESHOLD for n in names)
-
-    same_insurer = [e for e in entries if matches_insurer(e)]
+    same_insurer = same_insurer_entries(insurer, entries)
     if not same_insurer:
         logger.info("약관을 보유하지 않은 보험사입니다: %s (%s)", insurer, product)
         return NONE_MATCH

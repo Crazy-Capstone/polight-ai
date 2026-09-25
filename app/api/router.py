@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.routes import analysis, health, rag
+from app.api.routes import analysis, health, rag, terms
 from app.core.auth import verify_internal_api_key
 from app.core.config import get_settings
 
@@ -18,5 +18,6 @@ internal_router = APIRouter(
 )
 internal_router.include_router(rag.router)
 internal_router.include_router(analysis.router)
+internal_router.include_router(terms.router)
 
 api_router.include_router(internal_router)
