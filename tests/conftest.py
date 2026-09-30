@@ -56,6 +56,18 @@ def make_hit(
     )
 
 
+# 약관 대조 기록을 테스트가 실제 파일에 쓰지 않게 한다.
+#
+# terms_watch는 근거 없이 답한 질의와 확인이 필요한 약관을 data/terms_alerts.jsonl에
+# 쌓는다. 테스트가 거기에 섞이면 "근거 없이 답한 챗봇 질의 N건" 같은 수치가 테스트를
+# 돌릴 때마다 늘어난다. 운영 판단에 쓰는 값이라 오염되면 아무도 믿지 않는다.
+@pytest.fixture(autouse=True)
+def isolate_terms_alerts(tmp_path, monkeypatch):
+    from app.services import terms_watch
+
+    monkeypatch.setattr(terms_watch, "ALERTS_PATH", tmp_path / "terms_alerts.jsonl")
+
+
 @pytest.fixture
 def fake_repo():
     return FakeVectorRepository()

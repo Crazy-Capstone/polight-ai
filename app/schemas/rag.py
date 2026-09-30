@@ -3,11 +3,61 @@ from typing import Literal
 from app.schemas.base import CamelModel
 
 
+# 답변 1건이 근거로 삼은 약관 조각.
+#
+# 프론트가 [근거 N] 칩을 띄우고, 누르면 조항 본문을 보여줄 수 있는 만큼을 싣는다.
+# 인용문(quote)만으로는 "출처 표시"는 되어도 "원문 확인"은 되지 않는다 - 200자에서
+# 잘리므로 사용자가 보상 조건이나 면책 사유의 전문을 읽을 수 없다.
 class SourceChunk(CamelModel):
+    # 답변 본문의 [근거 N]과 잇는 번호(1부터).
+    #
+    # 지금까지는 배열 순서가 암묵적으로 이 역할을 했다. prompt_builder가 매긴 번호와
+    # 같은 리스트를 같은 순서로 담으니 우연히 맞았을 뿐, 어느 쪽이든 정렬이 한 번
+    # 바뀌면 조용히 어긋난다. 받는 쪽이 순서를 믿지 않아도 되도록 값으로 못 박는다.
+    index: int
+
     chunk_id: str
+
+    # 이 조각이 속한 약관/문서 식별자.
+    #
+    # 공용 약관 경로에서는 document_id에 terms_id가 실린다(policy_terms_chunks는
+    # 문서가 아니라 약관에 매여 있다). 그 값으로 policy_documents를 조회하면 0건이라,
+    # 받는 쪽이 헷갈리지 않도록 terms_id를 제 이름으로 함께 보낸다.
+    # document_id는 기존 계약 호환을 위해 그대로 둔다.
     document_id: str
+    terms_id: str | None = None
+
+    # 조항 제목과 페이지. 본문만 띄우면 사용자가 약관 어디를 보고 있는지 알 수 없다.
+    section_title: str = ""
     page: int
+    page_start: int
+    page_end: int
+
+    # 보장 조항인지 면책 조항인지.
+    #
+    # 이 구분이 화면에 보이지 않으면 사용자가 "보상하지 않는 손해" 조항을 보상 근거로
+    # 읽는다. 답변 자체는 맞는데 근거를 열어보고 반대로 이해하는 사고가 난다.
+    #
+    # 값은 policy_terms_chunks.clause_type의 CHECK 제약과 같은 어휘를 쓴다
+    # (COVERAGE / EXCLUSION / PROCEDURE / DEFINITION / GENERAL). 백엔드가 이미
+    # 쓰는 enum이라 받는 쪽에 새 어휘를 만들지 않는다.
+    clause_type: str = "GENERAL"
+
+    # 조항 전문. 팝업에 띄울 본문이다.
+    #
+    # 청크 단위라 최대 2,000자이고, 실측 평균은 779자다(약관 7종 2,548청크).
+    # 근거 12건이 붙은 답변이 평균 27KB, p90 59KB가 된다.
+    text: str
+
+    # 앞 200자. 목록에서 접어 보여줄 때 쓴다. 기존 계약이라 그대로 둔다.
     quote: str
+
+    # 답변 본문이 이 근거를 실제로 인용했는지.
+    #
+    # 검색 결과에 짝지어진 면책 조항이 따라붙어(attach_related_chunks) 근거가 12건까지
+    # 늘어나는데, 모델은 그중 일부만 쓴다. 이 값이 없으면 프론트가 인용되지 않은 조항까지
+    # 같은 비중으로 늘어놓게 된다.
+    cited: bool = False
 
 
 # 대화 이력 1턴.
@@ -33,6 +83,10 @@ class CertificateCoverage(CamelModel):
     # 증권에 인쇄된 실제 한도. 약관에는 없는 값이라 이것이 있어야 금액을 답할 수 있다.
     limit_amount: int | None = None
     limit_currency: str | None = None
+    # 담보조건 원문(자기부담금·자기부담률·개당한도 등). 증권 담보명에는 "(공제 20%)"가
+    # 잘려 나가지만 담보조건 표에는 남아 있어, 이 값이 있어야 자기부담을 답할 수 있다.
+    # 예: "* 자기부담금 10,000 * 물품당 최대 20만원 한도"
+    conditions: str | None = None
 
 
 # POST /internal/rag/query 요청 바디
@@ -105,4 +159,20 @@ class RagQueryResponse(CamelModel):
     response_type: Literal[
         "TEXT", "HOSPITAL_CARDS", "COVERAGE_CARDS", "EMERGENCY_CONTACTS", "POLICY_SUMMARY"
     ] = "TEXT"
+
+    # 이 답변과 함께 띄우면 좋은 현지 연락처 종류. 프론트에 이미 위치기반 연락처
+    # 화면이 있어서, 어느 종류를 띄울지만 알려주면 된다. 번호는 우리가 만들지 않는다.
+    #
+    # responseType과 분리한 이유가 있다. 그쪽은 "이 메시지를 어떻게 그릴까"라서
+    # 값이 하나뿐이고 서로 배타적이다. 여기에 연락처를 접어 넣으면 두 가지가 깨진다.
+    #
+    #   섞인 답변  "도난당했는데 보상되나요"는 약관 답변과 경찰 연락처가 함께
+    #              필요하다. responseType을 EMERGENCY_CONTACTS로 바꾸면 프론트가
+    #              텍스트 대신 카드를 그릴 수 있고, 그러면 보상 설명이 사라진다
+    #   2종 이상   병원과 경찰이 동시에 필요한 경우를 값 하나로는 표현할 수 없다
+    #
+    # 그래서 responseType은 TEXT로 두고 이 필드로만 알린다. 백엔드가 이 값을
+    # 프론트까지 전달하기 전에는 빈 배열과 같아서 기존 동작이 그대로 유지된다.
+    suggested_contacts: list[Literal["HOSPITAL", "POLICE", "EMBASSY"]] = []
+
     sources: list[SourceChunk]

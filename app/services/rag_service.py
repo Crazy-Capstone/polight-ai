@@ -1,16 +1,20 @@
 import logging
+import re
 
 from openai import OpenAI
 
 from app.core.config import get_settings
 from app.repositories.base import ChunkHit, SearchScope, VectorRepository
+from app.schemas import db_enums
 from app.schemas.rag import RagQueryRequest, RagQueryResponse, SourceChunk
+from app.services import terms_watch
 from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
 from app.services.embedding_service import embed_query
 from app.services.prompt_builder import SYSTEM_PROMPT, build_user_message
 from app.services.query_rewriter import rewrite
 from app.services.reranker import mmr_select
+from scripts.chunk_policy import is_toc_text
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +72,24 @@ def hybrid_search(
     return results
 
 
+# 목차 청크를 근거에서 걷어낸다.
+#
+# 청킹 단계에서 이미 거르지만(chunk_policy.drop_toc_chunks), 그전에 색인된 약관은
+# 재적재하기 전까지 DB에 그대로 남아 있다. 여기서 한 번 더 막지 않으면 그 약관을
+# 쓰는 사용자에게는 고친 것이 아무 소용이 없다.
+#
+# 목차를 근거로 주면 두 가지가 나빠진다. LLM에게는 보상 여부·조건·금액이 하나도 없는
+# 조각이 근거 자리를 차지하고, 사용자에게는 근거를 열었을 때 점선 덩어리가 보인다.
+# 실측(약관 7종 2,548청크)에서 목차 38건 중 24건에 카테고리가 붙어 있었다 -
+# 특약명이 빠짐없이 적혀 있어 "항공기 지연" 같은 질의에 걸린다.
+def drop_toc_hits(hits: list[ChunkHit]) -> list[ChunkHit]:
+    kept = [hit for hit in hits if not is_toc_text(hit.text)]
+    dropped = len(hits) - len(kept)
+    if dropped:
+        logger.info("목차 청크 %d건을 근거에서 제외했습니다 (색인된 약관의 재적재 필요)", dropped)
+    return kept
+
+
 # 검색된 보장 조항에 짝지어진 면책 조항을 끌어와 붙인다.
 #
 # 이 프로젝트 RAG의 핵심이다. "항공기 지연되면 보상되나요?" 같은 질문에서 유사도 검색은
@@ -85,30 +107,116 @@ def attach_related_chunks(hits: list[ChunkHit], repository: VectorRepository) ->
 
     # 중복 제거하되 순서는 유지
     unique = list(dict.fromkeys(wanted))
-    related = repository.get_by_ids(unique)
+    # 짝으로 끌어오는 조각도 목차일 수 있다. 여기를 안 막으면 후보 단계에서 걸러낸 것이
+    # 짝짓기를 타고 되돌아온다.
+    related = drop_toc_hits(repository.get_by_ids(unique))
     if related:
         logger.info("면책 조항 %d개를 근거에 추가했습니다.", len(related))
 
     return hits + related
 
 
+# 답변 끝에 붙은 연락처 태그를 떼어낸다.
+#
+# 사고 정황을 판단할 방법을 넷 놓고 골랐다.
+#
+#   키워드 규칙        지연 0인데 "약관에 병원 조항 있나요?"에도 붙는다
+#   별도 분류 LLM 호출  +1~2초. 챗봇은 사용자가 기다리는 화면이라 비싸다
+#   툴 콜링            answer_providers가 tools를 지원하지 않아 3벤더 추상화를 새로 짜야 한다
+#   답변 LLM에 동승     추가 호출 0. 이미 부르는 호출에 한 줄 더 얹는다  <- 이것
+#
+# 위치를 마지막 줄로 한정하지 않고 전역으로 지운다. 모델이 지시를 어겨 본문 중간에
+# 쓰는 경우가 있고, 그때 태그가 사용자 화면에 그대로 보인다.
+CONTACT_TAG = re.compile(r"\[\[\s*CONTACT\s*:\s*([A-Za-z_,\s]*)\]\]")
+
+# 태그에 없는 이름이 오면 버린다. 모델이 "AMBULANCE"처럼 스키마에 없는 값을 만들면
+# 응답 검증(Literal)에서 500이 난다. 답변은 이미 만들어졌는데 전달에 실패하는 것이
+# 가장 아깝다.
+CONTACT_KINDS = ("HOSPITAL", "POLICE", "EMBASSY")
+
+
+def split_contact_tag(answer: str) -> tuple[str, list[str]]:
+    """(태그를 지운 답변, 연락처 종류). 태그가 없으면 원문과 빈 목록."""
+    kinds: list[str] = []
+    for group in CONTACT_TAG.findall(answer):
+        for raw in group.split(","):
+            kind = raw.strip().upper()
+            if kind in CONTACT_KINDS and kind not in kinds:
+                kinds.append(kind)
+
+    clean = CONTACT_TAG.sub("", answer)
+    # 태그가 있던 자리에 남는 빈 줄과 공백을 정리한다.
+    clean = re.sub(r"[ \t]+\n", "\n", clean)
+    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
+
+    # 태그만 있고 본문이 없는 응답은 쓸 수 없다. 그럴 일은 없어야 하지만,
+    # 빈 답변을 내보내는 것보다 원문을 그대로 보내는 편이 덜 나쁘다.
+    if not clean:
+        return answer.strip(), kinds
+    return clean, kinds
+
+
+# 답변 본문에 남은 근거 표기. 프롬프트가 [근거 N] 형식을 지시하지만 모델이 늘
+# 그대로 쓰지는 않아, 실제로 나온 형태를 평가 데이터에서 세어 보고 맞췄다.
+#
+#   [근거 1]                          대부분
+#   [근거 1, 2, 4, 8]                 숫자 나열
+#   [근거 1, 근거 2, 근거 3]           "근거" 반복
+#   [근거 1 제2조 4호, 근거 7 제2조 4호] 조항 번호가 딸려 옴  <- 함정
+#
+# 마지막 형태 때문에 "괄호 안의 숫자를 전부 뽑는" 방식을 쓸 수 없다. 그러면
+# "제2조 4호"의 2와 4까지 근거 번호로 읽혀, 인용하지도 않은 조항이 화면에 뜬다.
+# 쉼표로 끊고 조각마다 첫 숫자만 취한다 - 조항 번호는 언제나 근거 번호 뒤에 온다.
+CITATION = re.compile(r"\[\s*근거\s*([^\]]*)\]")
+
+
+def parse_cited_indexes(answer: str, total: int) -> set[int]:
+    """답변이 실제로 인용한 근거 번호. 범위를 벗어난 번호는 버린다."""
+    cited: set[int] = set()
+    for group in CITATION.findall(answer):
+        for segment in group.split(","):
+            number = re.search(r"\d+", segment)
+            if not number:
+                continue
+            index = int(number.group())
+            # 모델이 [근거 15]처럼 없는 번호를 쓰는 경우가 있다. 그대로 흘리면
+            # 프론트가 매칭되는 조항을 못 찾아 빈 팝업을 띄운다.
+            if 1 <= index <= total:
+                cited.add(index)
+    return cited
+
+
 # 출처는 LLM 출력에서 뽑지 않고 실제 검색된 청크에서 만든다.
 # LLM에게 인용문을 생성시키면 원문에 없는 문장을 만들어낼 수 있고, 보험 답변에서
 # 근거가 조작되면 서비스 신뢰가 무너진다. 원문을 그대로 잘라 쓰면 인용의 진위가 보장된다.
-def build_sources(hits: list[ChunkHit]) -> list[SourceChunk]:
+def build_sources(
+    hits: list[ChunkHit], cited_indexes: set[int] | None = None
+) -> list[SourceChunk]:
     sources = []
-    for hit in hits:
+    # 번호는 prompt_builder.format_evidence와 같은 규칙으로 매긴다. 둘이 같은 리스트를
+    # 같은 순서로 받으므로 [근거 N]과 index가 일치한다. 한쪽 정렬만 바뀌면 깨지므로
+    # 이 불변식은 test_evidence_index_matches_prompt_numbering이 지킨다.
+    for i, hit in enumerate(hits, start=1):
         quote = hit.text[:QUOTE_MAX_CHARS]
         if len(hit.text) > QUOTE_MAX_CHARS:
             quote += "..."
         sources.append(
             SourceChunk(
+                index=i,
                 chunk_id=hit.chunk_id,
                 document_id=hit.document_id,
+                terms_id=hit.terms_id,
+                section_title=hit.section_title,
                 # SourceChunk.page는 단일 int이므로 조항이 시작되는 페이지를 보낸다.
                 # 사용자가 약관에서 조항을 찾을 때 기준이 되는 페이지다.
                 page=hit.page_start,
+                page_start=hit.page_start,
+                page_end=hit.page_end,
+                # 내부값(included/excluded)을 DB·백엔드가 쓰는 어휘로 되돌린다.
+                clause_type=db_enums.clause_type(hit.coverage_type),
+                text=hit.text,
                 quote=quote,
+                cited=i in cited_indexes if cited_indexes is not None else False,
             )
         )
     return sources
@@ -161,6 +269,9 @@ def answer_question(
     # 도는 기존 경로를 그대로 쓴다.
     if settings.database_url and not request.terms_id:
         logger.info("terms_id가 없어 약관 검색을 건너뜁니다 (tripId=%s)", request.trip_id)
+        # 근거 없이 답한 질의를 세어 둔다. 어느 약관이 필요한지는 요청에 없어
+        # 알 수 없지만, 이 빈도가 곧 "약관을 못 갖춰서 생기는 손해"의 크기다.
+        terms_watch.record_missing_terms_id()
         return RagQueryResponse(answer=NO_EVIDENCE_ANSWER, sources=[])
 
     # 인자로 받은 history가 있으면 그것을 쓰고(테스트용), 없으면 요청에 실린 것을 쓴다
@@ -223,6 +334,10 @@ def answer_question(
     if not candidates:
         candidates = hybrid_search(repository, search_query, query_vector, scope=base_scope, top_k=pool)
 
+    # MMR에 넘기기 전에 걷어낸다. 뒤에서 거르면 목차가 top_k 자리를 차지한 뒤
+    # 사라져 근거 수만 줄고, 밀려난 실제 조항은 돌아오지 않는다.
+    candidates = drop_toc_hits(candidates)
+
     if not candidates:
         return RagQueryResponse(answer=NO_EVIDENCE_ANSWER, sources=[])
 
@@ -252,4 +367,25 @@ def answer_question(
     )
     answer = _call_llm(user_message, client=client)
 
-    return RagQueryResponse(answer=answer, sources=build_sources(hits))
+    # 사고 정황이면 프론트가 현지 연락처를 함께 띄우도록 종류를 실어 보낸다.
+    # responseType은 TEXT로 둔다 - 그 값을 바꾸면 프론트가 텍스트 대신 카드를
+    # 그릴 수 있고, 그러면 방금 만든 약관 답변이 사라진다. 자세한 이유는
+    # RagQueryResponse.suggested_contacts 주석.
+    answer, contacts = split_contact_tag(answer)
+    if contacts:
+        logger.info("현지 연락처 안내를 함께 보냅니다: %s", ", ".join(contacts))
+
+    # 답변이 실제로 인용한 근거를 표시해 둔다.
+    #
+    # 검색 8건에 짝지어진 면책 조항이 따라붙어(attach_related_chunks) 근거가 12건까지
+    # 늘어나는데 모델은 그중 일부만 쓴다. 이 표시가 없으면 프론트가 인용되지 않은
+    # 조항까지 같은 비중으로 늘어놓게 된다.
+    #
+    # 연락처 태그를 떼어낸 뒤의 답변으로 센다. 사용자에게 보이는 글이 기준이다.
+    cited = parse_cited_indexes(answer, len(hits))
+
+    return RagQueryResponse(
+        answer=answer,
+        suggested_contacts=contacts,
+        sources=build_sources(hits, cited),
+    )

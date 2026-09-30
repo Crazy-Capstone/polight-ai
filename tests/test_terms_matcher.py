@@ -149,3 +149,38 @@ def test_registry_ids_point_to_real_chunk_files():
     ]
 
     assert not missing, f"청크 파일이 없는 약관: {missing}"
+
+
+# 개정판을 다시 고를 때 다른 상품으로 건너뛰면 안 된다.
+#
+# 한쪽이 다른 쪽에 포함되기만 해도 유사도가 0.95라, 증권의 "해외여행보험"은
+# "365연간해외여행보험"과도 닮은 것으로 잡힌다. 개정판 후보를 느슨한 기준으로
+# 모으면 개정일이 맞는다는 이유만으로 다른 상품 약관이 뽑힌다.
+#
+# 실제로 삼성화재 상품을 4종 등록하자 이 경로가 터졌다. 그것도 EXACT로 나가
+# 사용자에게는 경고조차 뜨지 않는다.
+REVISION_REGISTRY = [
+    {"id": "samsung_overseas_2024", "insurer": "삼성화재", "product": "해외여행보험",
+     "aliases": [], "revision": "2024-01-01"},
+    {"id": "samsung_365_2026", "insurer": "삼성화재", "product": "365연간해외여행보험",
+     "aliases": [], "revision": "2026-06-06"},
+    {"id": "samsung_overseas_2026", "insurer": "삼성화재", "product": "해외여행보험",
+     "aliases": [], "revision": "2026-06-06"},
+]
+
+
+def test_revision_lookup_stays_in_the_same_product():
+    match = find_terms("삼성화재", "해외여행보험", revision="2026-06-06", registry=REVISION_REGISTRY)
+
+    assert match.terms_id == "samsung_overseas_2026", "다른 상품의 같은 개정판이 뽑혔다"
+    assert match.level == "EXACT"
+
+
+# 같은 상품의 다른 판만 있으면 그건 정상적으로 REVISION이어야 한다.
+def test_revision_fallback_still_works_within_the_product():
+    registry = [r for r in REVISION_REGISTRY if r["id"] != "samsung_overseas_2026"]
+
+    match = find_terms("삼성화재", "해외여행보험", revision="2026-06-06", registry=registry)
+
+    assert match.terms_id == "samsung_overseas_2024"
+    assert match.level == "REVISION"

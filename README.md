@@ -2,7 +2,8 @@
 
 **Portable · Light · Flight**
 
-> 2026-1 졸업 작품 (AZAMS팀) · **FIN:NECT 챌린지 우수상 수상** 🏆
+2026-1 졸업 작품 (AZAMS팀) · **FIN:NECT 챌린지 우수상 수상** 🏆
+
 
 Polight는 여행자 보험 증권과 약관을 자동 분석해, 복잡한 보장 내용을 한눈에 보여주고
 사용자의 질문에 약관 근거로 답하는 **여행자 보험 AI 서비스**입니다.
@@ -29,7 +30,7 @@ Polight는 여행자 보험 증권과 약관을 자동 분석해, 복잡한 보�
 
 | 기능 | 설명 | 저장소 |
 |---|---|---|
-| **증권 분석** | 사용자가 올린 증권 PDF에서 담보·한도·보험기간을 추출해 백엔드로 콜백 | DB 미사용(결과 백엔드 저장) |
+| **증권 분석** | 사용자가 올린 증권 PDF에서 담보·한도·보험기간을 추출해 백엔드로 콜백 | 결과 백엔드 저장 |
 | **보장 상세** | 약관에서 보장 규칙(면책·세부한도·청구서류)을 추출해 DB 적재, 증권 담보와 연결 | pgvector |
 | **AI 챗봇** | 약관을 검색해 사용자의 질문에 근거 기반으로 답변(RAG) | pgvector |
 
@@ -162,6 +163,34 @@ uvicorn app.main:app --reload
 ```
 
 `DATABASE_URL`이 비어 있으면 파일 저장소로, 설정되면 pgvector로 동작합니다.
+
+### 약관 추가 (운영자)
+
+```bash
+# 1) 파싱·청킹·임베딩 (로컬)
+python scripts/ingest_terms.py --pdf <약관>.pdf --insurer "보험사" --product "상품명"
+
+# 2) DB 이관 (DATABASE_URL 필요)
+python scripts/migrate_terms_to_db.py --terms <약관_id>
+python scripts/migrate_terms_coverages.py --terms <약관_id> --provider openai-41
+```
+
+### 배포 (Docker)
+
+```bash
+DOCKER_BUILDKIT=0 docker build -t polight-ai:latest .
+docker compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+## 🔌 백엔드 인터페이스
+
+| 방향 | 내용 |
+|---|---|
+| 증권 분석 완료 | AI → 백엔드 콜백에 담보 목록(+`category`)·보험사·상품명·보험기간 전달 |
+| 챗봇 질문 | 백엔드 → AI 요청에 `termsId`(약관 식별자) 포함. 없으면 근거 없음 응답 |
+| 보장 상세 연결 | 백엔드가 증권 담보 ↔ 약관 규칙을 title 우선·category 폴백으로 연결 |
 
 ---
 

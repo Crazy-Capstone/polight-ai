@@ -104,6 +104,25 @@ def _legacy_cache_path(pdf_path: Path) -> Path:
     return CACHE_DIR / f"{pdf_path.stem}_upstage.json"
 
 
+# 캐시에 있는 파싱 결과만 돌려준다. 없으면 None이고, API는 부르지 않는다.
+#
+# parse_pdf는 캐시가 없으면 유료 파싱으로 넘어간다. 이미 색인된 약관의 표지 정보를
+# 들여다보는 것처럼 "있으면 좋고 없으면 넘어갈" 용도에 그것을 쓰면, 조회하려다
+# 돈이 나간다. 그래서 과금 경로가 없는 입구를 따로 둔다.
+def cached_elements(pdf_path: Path) -> list[dict] | None:
+    # 해시 경로는 PDF가 있어야 계산된다. 서버에는 약관 PDF를 옮기지 않으므로
+    # (증권이 섞일 위험 때문에) 파일명 기반 예전 캐시도 함께 본다.
+    candidates = [_legacy_cache_path(pdf_path)]
+    if pdf_path.exists():
+        candidates.insert(0, _cache_path(pdf_path))
+
+    for path in candidates:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+    return None
+
+
 # PDF 하나를 파싱해 요소 리스트를 반환한다.
 #
 # 응답을 캐시하는 이유: Upstage는 페이지 단위 과금이라 재실행할 때마다 비용이 든다.

@@ -378,4 +378,5 @@ class PgVectorRepository:
         )
         hit.chunk_index = chunk_index
         hit.clause_path = clause_path
+        hit.terms_id = str(terms_id)
         return hit

@@ -413,6 +413,7 @@ def to_coverages(certificate: dict, age: int | None = None) -> list[CertificateC
     가입하지 않은 담보를 물었을 때 "보상됩니다"라는 틀린 답을 막을 수 있다.
     """
     age = age if age is not None else subscriber_age(certificate)
+    descriptions = _descriptions(certificate)
     coverages: list[CertificateCoverage] = []
 
     for row in _coverage_rows(certificate):
@@ -431,6 +432,9 @@ def to_coverages(certificate: dict, age: int | None = None) -> list[CertificateC
                 subscribed=label not in NOT_COVERED_MARKS,
                 limitAmount=amount,
                 limitCurrency=currency,
+                # 담보명에는 "(공제 20%)"가 잘려 나가지만 담보조건 표에는 남아 있다.
+                # 챗봇이 자기부담금·자기부담률을 답하려면 이 원문이 필요하다.
+                conditions=_first(row, CONDITION_KEYS) or _find_description(row, descriptions),
             )
         )
 

@@ -15,80 +15,493 @@
     "로마숫자를 아라비아로 쓰는 경우가 있어, 정확히 일치하지 않는 경우가 흔하다.",
     "",
     "revision은 개정 시점이다. 같은 상품이라도 개정판마다 조항이 다르므로, 증권의",
-    "가입일에 맞는 판을 골라야 한다. 못 고르면 최신판으로 폴백하되 화면에 알린다."
+    "가입일에 맞는 판을 골라야 한다. 못 고르면 최신판으로 폴백하되 화면에 알린다.",
+    "",
+    "아래 세 필드는 개정판 확인 비용을 줄이기 위한 것이다. 없어도 검색·매칭은",
+    "그대로 동작하지만, 있으면 '이 약관이 개정됐나'를 PDF를 받지 않고 판단할 수 있다.",
+    "",
+    "  source_url    이 약관을 받은 공시실 주소. 개정 확인 때 여기부터 연다.",
+    "                없으면 보험사 홈페이지에서 공시실을 매번 다시 찾게 되는데,",
+    "                실제로 시간이 가장 많이 새는 지점이 거기다.",
+    "",
+    "  terms_code    약관코드. 끝 8자리가 시행일이다(8403-0000-20250630).",
+    "                공시실 목록에도 그대로 찍혀 있어, 목록의 코드와 이 값을 비교하면",
+    "                다운로드 없이 개정 여부가 판별된다. 증권에 상품명 대신 이 코드가",
+    "                찍히는 경우가 있어 aliases에도 같이 넣는다.",
+    "",
+    "  collected_at  이 약관을 받은 날. 언제 기준의 사본인지 알려준다.",
+    "",
+    "세 필드는 ingest_terms.py가 등록 초안을 찍을 때 자리를 만들어 준다.",
+    "보험사·상품명·시행일·terms_code는 약관 표지에서 읽어 채우므로(scripts/terms_cover.py)",
+    "손으로 적을 것은 source_url 하나다."
   ],
-
   "terms": [
     {
-      "id": "db_travel",
+      "id": "db_travel_promy1",
       "insurer": "DB손해보험",
       "product": "프로미 해외여행보험Ⅰ",
-      "aliases": ["프로미 해외여행보험1", "프로미 해외여행보험", "DB 해외여행보험"],
-      "revision": null
+      "aliases": [
+        "프로미 해외여행보험1",
+        "프로미 해외여행보험",
+        "DB 해외여행보험"
+      ],
+      "revision": null,
+      "underwriter_aliases": [
+        "디비손해보험",
+        "동부화재"
+      ]
     },
     {
-      "id": "db_travel_4",
+      "id": "db_travel_promy4",
       "insurer": "DB손해보험",
       "product": "프로미 해외여행보험Ⅳ",
-      "aliases": ["프로미 해외여행보험4", "프로미 해외여행보험 4형"],
-      "revision": null
+      "aliases": [
+        "프로미 해외여행보험4",
+        "프로미 해외여행보험 4형"
+      ],
+      "revision": null,
+      "underwriter_aliases": [
+        "디비손해보험",
+        "동부화재"
+      ]
     },
     {
-      "id": "hyundai_travel_2022",
+      "id": "hyundai_travel_overseas_20220718",
       "insurer": "현대해상",
       "product": "해외여행보험",
-      "aliases": ["현대해상 해외여행보험", "8400-0000-20220718"],
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20220718"
+      ],
       "revision": "2022-07-18"
     },
     {
-      "id": "hyundai_travel_2025",
+      "id": "hyundai_travel_direct_20250630",
       "insurer": "현대해상",
       "product": "다이렉트 해외여행보험",
-      "aliases": ["현대해상 다이렉트 해외여행보험", "8403-0000-20250630"],
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20250630"
+      ],
       "revision": "2025-06-30"
     },
     {
-      "id": "kb_travel_2018",
+      "id": "kb_travel_overseas_20180401",
       "insurer": "KB손해보험",
       "product": "KB해외여행보험",
-      "aliases": ["KB 해외여행보험"],
-      "revision": "2018-04-01"
+      "aliases": [
+        "KB 해외여행보험"
+      ],
+      "revision": "2018-04-01",
+      "underwriter_aliases": [
+        "케이비손해보험"
+      ]
     },
     {
-      "id": "meritz_travel",
+      "id": "meritz_travel_overseasmedical_20220801",
       "insurer": "메리츠화재",
       "product": "해외여행 실손의료보험",
-      "aliases": ["메리츠 해외여행보험", "메리츠일반-특종/상해/여행B-3-2208C"],
+      "aliases": [
+        "메리츠 해외여행보험",
+        "메리츠일반-특종/상해/여행B-3-2208C"
+      ],
       "revision": "2022-08-01"
     },
     {
-      "id": "samsung_travel_2024",
+      "id": "samsung_travel_overseas_20240101",
       "insurer": "삼성화재",
       "product": "해외여행보험",
-      "aliases": ["삼성화재 해외여행보험"],
+      "aliases": [
+        "삼성화재 해외여행보험"
+      ],
       "revision": "2024-01-01"
     },
     {
-      "id": "carrot_travel_2025",
+      "id": "carrot_travel_overseas_20250901",
       "insurer": "캐롯손해보험",
       "product": "캐롯 해외여행보험",
-      "aliases": ["캐롯 해외여행보험", "해외여행보험"],
+      "aliases": [
+        "캐롯 해외여행보험",
+        "해외여행보험"
+      ],
       "revision": "2025-09-01",
-
       "_주의": [
         "마이뱅크를 통해 판매되는 증권에 인수사가 '한화손해보험(주)'로 적혀 나온다.",
         "실물 증권과 이 약관의 담보 13종이 1:1로 대응하는 것은 확인했으나,",
         "두 회사의 인수 관계는 확인하지 못했다. 잘못 이으면 다른 회사의 약관으로",
         "보상 조건을 답하게 되므로, 확인되면 이 항목을 정리해야 한다."
       ],
-      "underwriter_aliases": ["한화손해보험", "한화손해보험(주)"]
+      "underwriter_aliases": [
+        "한화손해보험",
+        "한화손해보험(주)"
+      ]
     },
     {
-      "id": "meritz_travel_platform",
+      "id": "meritz_travel_platform_20260715",
       "insurer": "메리츠화재",
       "product": "해외여행보험(플랫폼)",
-      "aliases": ["해외여행보험", "메리츠 해외여행보험(플랫폼)"],
-      "revision": null
+      "aliases": [
+        "메리츠 해외여행보험(플랫폼)",
+        "메리츠일반-특종/상해/여행B-9-2607A"
+      ],
+      "revision": "2026-07-15",
+      "terms_code": "메리츠일반-특종/상해/여행B-9-2607A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do"
+    },
+    {
+      "id": "samsung_travel_365_20260101",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행보험",
+      "aliases": [
+        "365연간 해외여행보험",
+        "삼성화재 365연간해외여행보험"
+      ],
+      "revision": "2026-01-01",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365_20260205",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행보험",
+      "aliases": [
+        "365연간 해외여행보험",
+        "삼성화재 365연간해외여행보험"
+      ],
+      "revision": "2026-02-05",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365_20260606",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행보험",
+      "aliases": [
+        "365연간 해외여행보험",
+        "삼성화재 365연간해외여행보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365medical_20260101",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행실손의료비보험",
+      "aliases": [
+        "365연간 해외여행실손의료비보험",
+        "삼성화재 365연간해외여행실손의료비보험"
+      ],
+      "revision": "2026-01-01",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_365medical_20260606",
+      "insurer": "삼성화재",
+      "product": "365연간해외여행실손의료비보험",
+      "aliases": [
+        "365연간 해외여행실손의료비보험",
+        "삼성화재 365연간해외여행실손의료비보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_overseas_20260606",
+      "insurer": "삼성화재",
+      "product": "해외여행보험",
+      "aliases": [
+        "삼성화재 해외여행보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_overseasmedical_20260101",
+      "insurer": "삼성화재",
+      "product": "해외여행 실손의료보험",
+      "aliases": [
+        "해외여행실손의료보험",
+        "삼성화재 해외여행 실손의료보험"
+      ],
+      "revision": "2026-01-01",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "samsung_travel_overseasmedical_20260606",
+      "insurer": "삼성화재",
+      "product": "해외여행 실손의료보험",
+      "aliases": [
+        "해외여행실손의료보험",
+        "삼성화재 해외여행 실손의료보험"
+      ],
+      "revision": "2026-06-06",
+      "source_url": "https://www.samsungfire.com/vh/page/VH.REIF0012.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_direct_20260101",
+      "insurer": "현대해상",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8403-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_direct_20260606",
+      "insurer": "현대해상",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8403-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_direct_20260825",
+      "insurer": "현대해상",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "현대해상 다이렉트 해외여행보험",
+        "8403-0000-20260825"
+      ],
+      "revision": "2026-08-25",
+      "terms_code": "8403-0000-20260825",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas_20260101",
+      "insurer": "현대해상",
+      "product": "해외여행보험",
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8400-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas_20260606",
+      "insurer": "현대해상",
+      "product": "해외여행보험",
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8400-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas_20260825",
+      "insurer": "현대해상",
+      "product": "해외여행보험",
+      "aliases": [
+        "현대해상 해외여행보험",
+        "8400-0000-20260825"
+      ],
+      "revision": "2026-08-25",
+      "terms_code": "8400-0000-20260825",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260101",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8405-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260321",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260321"
+      ],
+      "revision": "2026-03-21",
+      "terms_code": "8405-0000-20260321",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260606",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8405-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_overseas2_20260825",
+      "insurer": "현대해상",
+      "product": "해외여행보험Ⅱ",
+      "aliases": [
+        "해외여행보험2",
+        "현대해상 해외여행보험Ⅱ",
+        "8405-0000-20260811"
+      ],
+      "revision": "2026-08-25",
+      "terms_code": "8405-0000-20260811",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24",
+      "_주의": [
+        "약관 표지의 시행일은 2026-08-11인데 공시실 판매개시일은 2026-08-25다.",
+        "revision에는 판매개시일을 넣었다. 이 값으로 고르는 것은 '어느 판으로",
+        "가입했는가'이고, 8월 20일 가입자에게는 아직 이전 판(2026-06-06)이",
+        "적용되기 때문이다. 시행일은 terms_code 끝 8자리에 그대로 남아 있다."
+      ]
+    },
+    {
+      "id": "hyundai_travel_platform_20251001",
+      "insurer": "현대해상",
+      "product": "해외여행보험(플랫폼전용)",
+      "aliases": [
+        "해외여행보험(플랫폼 전용)",
+        "8413-0000-20251001"
+      ],
+      "revision": "2025-10-01",
+      "terms_code": "8413-0000-20251001",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_platform_20260101",
+      "insurer": "현대해상",
+      "product": "해외여행보험(플랫폼전용)",
+      "aliases": [
+        "해외여행보험(플랫폼 전용)",
+        "8413-0000-20260101"
+      ],
+      "revision": "2026-01-01",
+      "terms_code": "8413-0000-20260101",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "hyundai_travel_platform_20260606",
+      "insurer": "현대해상",
+      "product": "해외여행보험(플랫폼전용)",
+      "aliases": [
+        "해외여행보험(플랫폼 전용)",
+        "8413-0000-20260606"
+      ],
+      "revision": "2026-06-06",
+      "terms_code": "8413-0000-20260606",
+      "source_url": "https://www.hi.co.kr/bin/PA/03/HHPA03021M",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_direct_20260901",
+      "insurer": "메리츠화재",
+      "product": "다이렉트 해외여행보험",
+      "aliases": [
+        "메리츠 다이렉트 해외여행보험",
+        "메리츠일반-특종/상해/여행B-10-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-10-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseas_20260901",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험",
+      "aliases": [
+        "메리츠 해외여행보험",
+        "메리츠일반-특종/상해/여행B-1-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-1-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseasmedical_20260901",
+      "insurer": "메리츠화재",
+      "product": "해외여행 실손의료보험",
+      "aliases": [
+        "해외여행실손의료보험",
+        "메리츠 해외여행 실손의료보험",
+        "메리츠일반-특종/상해/여행B-3-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-3-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_platform_20260901",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험(플랫폼)",
+      "aliases": [
+        "메리츠 해외여행보험(플랫폼)",
+        "메리츠일반-특종/상해/여행B-9-2609A"
+      ],
+      "revision": "2026-09-01",
+      "terms_code": "메리츠일반-특종/상해/여행B-9-2609A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseas4_20260715",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험Ⅳ",
+      "aliases": [
+        "해외여행보험4",
+        "메리츠 해외여행보험Ⅳ",
+        "메리츠일반-특종/상해/여행B-6-2607A"
+      ],
+      "revision": "2026-07-15",
+      "terms_code": "메리츠일반-특종/상해/여행B-6-2607A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
+    },
+    {
+      "id": "meritz_travel_overseas5_20260715",
+      "insurer": "메리츠화재",
+      "product": "해외여행보험Ⅴ",
+      "aliases": [
+        "해외여행보험5",
+        "메리츠 해외여행보험Ⅴ",
+        "메리츠일반-특종/상해/여행B-7-2607A"
+      ],
+      "revision": "2026-07-15",
+      "terms_code": "메리츠일반-특종/상해/여행B-7-2607A",
+      "source_url": "https://www.meritzfire.com/disclosure/product-announcement/product-list.do",
+      "collected_at": "2026-09-24"
     }
   ]
 }
