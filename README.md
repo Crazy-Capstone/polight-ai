@@ -2,7 +2,8 @@
 
 **Portable · Light · Flight**
 
-> 2026-1 졸업 작품 (AZAMS팀) · **FIN:NECT 챌린지 본선 진출** 🏆
+2026-1 졸업 작품 (AZAMS팀) · **FIN:NECT 챌린지 우수상 수상** 🏆
+
 
 Polight는 여행자 보험 증권과 약관을 자동 분석해, 복잡한 보장 내용을 한눈에 보여주고
 사용자의 질문에 약관 근거로 답하는 **여행자 보험 AI 서비스**입니다.
@@ -23,13 +24,13 @@ Polight는 여행자 보험 증권과 약관을 자동 분석해, 복잡한 보�
 
 ---
 
-## 🧩 AI 서버가 하는 일
+## 🧩 AI 서버 역할
 
 세 가지 기능이 있고, DB 사용 여부가 서로 다릅니다.
 
 | 기능 | 설명 | 저장소 |
 |---|---|---|
-| **증권 분석** | 사용자가 올린 증권 PDF에서 담보·한도·보험기간을 추출해 백엔드로 콜백 | DB 미사용(결과는 백엔드가 저장) |
+| **증권 분석** | 사용자가 올린 증권 PDF에서 담보·한도·보험기간을 추출해 백엔드로 콜백 | 결과 백엔드 저장 |
 | **보장 상세** | 약관에서 보장 규칙(면책·세부한도·청구서류)을 추출해 DB 적재, 증권 담보와 연결 | pgvector |
 | **AI 챗봇** | 약관을 검색해 사용자의 질문에 근거 기반으로 답변(RAG) | pgvector |
 
@@ -51,7 +52,7 @@ flowchart LR
     E --> F
 ```
 
-### 2. 약관 색인·적재 (운영자가 미리)
+### 2. 약관 색인·적재
 
 ```mermaid
 flowchart LR
@@ -60,7 +61,7 @@ flowchart LR
     B --> D[migrate_terms_coverages.py<br/>보장 규칙 → policy_terms_coverages]
 ```
 
-### 3. AI 챗봇 (질문 시 실시간, RAG)
+### 3. AI 챗봇 (RAG 기반 실시간 응답)
 
 ```mermaid
 flowchart LR
@@ -99,11 +100,11 @@ flowchart LR
 | PDF 파싱 | Upstage Document Parse · PyMuPDF |
 | 임베딩 | Upstage Embedding (`upstage-1536`) |
 | 벡터 검색 | PostgreSQL + pgvector (하이브리드: 벡터 + BM25) |
-| LLM | OpenAI (GPT-4.1) · Google Gemini (교체 가능) |
+| LLM | OpenAI (GPT-4.1) · Google Gemini |
 | 데이터 검증 | Pydantic |
 | 배포 | Docker · Docker Compose |
 
-> LLM·임베딩 벤더는 `.env` 한 줄(`ANSWER_PROVIDER`, `EMBEDDING_PROVIDER` 등)로
+> LLM·임베딩 벤더는 `.env`(`ANSWER_PROVIDER`, `EMBEDDING_PROVIDER` 등)로
 > 코드 변경 없이 교체됩니다.
 
 ---
