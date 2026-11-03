@@ -53,11 +53,25 @@ jobs:
       - name: Deploy on AI EC2 through Systems Manager
         id: deploy
         run: |
+          COMPOSE_B64=$(base64 -w0 docker-compose.ai-ec2.yml)
+          PARAMETERS=$(jq -cn \
+            --arg compose_b64 "$COMPOSE_B64" \
+            --arg registry "$ECR_REGISTRY" \
+            '{commands:[
+              "set -e",
+              "cd /home/ec2-user/polight-ai",
+              ("printf %s " + ($compose_b64|@sh) + " | base64 -d > docker-compose.ai-ec2.yml"),
+              "chown ec2-user:ec2-user docker-compose.ai-ec2.yml",
+              ("aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin " + $registry),
+              "docker compose -f docker-compose.ai-ec2.yml pull ai",
+              "docker compose -f docker-compose.ai-ec2.yml up -d --no-build ai",
+              "for i in $(seq 1 20); do if curl -fsS http://localhost:8000/health; then exit 0; fi; sleep 3; done; docker logs --tail 100 polight-ai; exit 1"
+            ]}')
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy AI image from GitHub Actions" \
-            --parameters '{"commands":["set -e","cd /home/ec2-user/polight-ai","aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin 767918718624.dkr.ecr.ap-northeast-2.amazonaws.com","docker compose -f docker-compose.ai-ec2.yml pull ai","docker compose -f docker-compose.ai-ec2.yml up -d --no-build ai","for i in $(seq 1 20); do if curl -fsS http://localhost:8000/health; then exit 0; fi; sleep 3; done; docker logs --tail 100 polight-ai; exit 1"]}' \
+            --parameters "$PARAMETERS" \
             --query "Command.CommandId" \
             --output text)
           echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
