@@ -101,6 +101,19 @@ POST /internal/rag/query
   "answer": "도난 시 **개당 최대 20만원**까지 보상됩니다 [근거 1]. 다만 분실은 보상되지 않습니다 [근거 3].",
   "responseType": "TEXT",
   "suggestedContacts": ["POLICE"],
+  "claimDocuments": [
+    {
+      "documentName": "관할경찰서의 도난신고확인서",
+      "requirementType": "CONDITIONAL",
+      "conditionText": "보험의 목적을 도난당했을 때",
+      "coverageTitle": "휴대품 손해 (분실 제외)",
+      "sourceChunkId": "uuid",
+      "sourceQuote": "1. 도난품의 명세서\n2. 관할경찰서의 도난신고확인서\n3. 그 밖의 필요한 증거자료",
+      "sectionTitle": "제5조(손해발생의 통지 및 조사)",
+      "pageStart": 94,
+      "pageEnd": 94
+    }
+  ],
   "sources": [
     {
       "index": 1,
@@ -119,6 +132,15 @@ POST /internal/rag/query
   ]
 }
 ```
+
+`claimDocuments`는 청구 서류 질문에만 채워집니다. 약관 청크와 서류 항목을 잇는
+저장된 원문 인용이 있을 때만 반환하며, LLM이 일반 지식으로 제안한 준비물은 포함하지
+않습니다. `requirementType`은 `REQUIRED`(명시적 제출 의무), `CONDITIONAL`(특정 상황에서
+제출), `UNKNOWN`(저장 데이터만으로 분류 불가)입니다. 서류 질문의 `answer`는 이 배열의
+항목을 모델이 다시 만들어 나열하지 않고, 고정 안내문과 실제 출처 번호만 반환합니다.
+근거가 연결된 항목이 없으면 `claimDocuments`는 빈 배열이며, 답변도 목록을 확정할 수 없다고
+안내합니다. Spring DTO와 `chat_messages` 저장/재조회 경로에서 이 필드를 보존해야 프론트가
+체크리스트로 그릴 수 있습니다.
 
 #### 근거 본문 — 프론트가 [근거 N]을 눌러 조항을 볼 수 있게 하는 데 필요한 것
 

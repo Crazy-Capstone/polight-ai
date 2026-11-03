@@ -344,6 +344,27 @@ def answer_question(
     hits = mmr_select(candidates, top_k=settings.top_k, lambda_=settings.mmr_lambda)
     hits = attach_related_chunks(hits, repository)
 
+    # 청구 서류를 물은 경우에만, 검색된 약관 조항에 직접 연결된 체크리스트를 반환한다.
+    # 자유 답변과 달리 이 목록은 저장된 원문 인용이 있는 행만 사용한다.
+    compact_question = re.sub(r"\s+", "", request.question).lower()
+    claim_document_question = (
+        any(word in compact_question for word in ("서류", "구비", "준비물", "증빙", "문서"))
+        and any(word in compact_question for word in ("필요", "청구", "준비", "제출", "목록", "뭐", "무슨", "어떤"))
+    )
+    claim_documents = []
+    if claim_document_question:
+        get_documents = getattr(repository, "get_required_documents_for_chunks", None)
+        if get_documents:
+            rows = get_documents([hit.chunk_id for hit in hits])
+            # 같은 이름의 서류가 여러 담보에 붙어 있어도 체크리스트에는 한 번만 낸다.
+            seen_documents = set()
+            for row in rows:
+                key = (re.sub(r"\s+", "", row["document_name"]).casefold(), row["requirement_type"])
+                if key in seen_documents:
+                    continue
+                seen_documents.add(key)
+                claim_documents.append(row)
+
     # 증권 담보가 실려 왔으면 프롬프트에 넣는다.
     #
     # 이게 증권 연동의 핵심이다. 약관에는 그 상품이 팔 수 있는 모든 특약이 있어서,
@@ -359,13 +380,33 @@ def answer_question(
             "complete": request.coverages_complete,
         }
 
-    user_message = build_user_message(
-        request.question,
-        hits,
-        contract_info=contract_info,
-        history=turns,
-    )
-    answer = _call_llm(user_message, client=client)
+    if claim_document_question:
+        # 청구 서류 목록은 문장 생성 모델에게 맡기지 않는다. 저장된 서류 항목과
+        # 직접 연결된 원문 청크만 체크리스트로 전달하고, 답변 본문은 고정 문구로 둔다.
+        # 근거 자료가 아직 적재되지 않은 경우에도 모델이 일반 상식으로 목록을 채우지 않는다.
+        if claim_documents:
+            source_indexes = sorted(
+                {
+                    index
+                    for index, hit in enumerate(hits, start=1)
+                    if any(doc["source_chunk_id"] == hit.chunk_id for doc in claim_documents)
+                }
+            )
+            citations = f" [근거 {', '.join(str(i) for i in source_indexes)}]" if source_indexes else ""
+            answer = "약관 원문 근거와 연결된 서류 항목을 아래 체크리스트에 표시했습니다." + citations
+        else:
+            answer = (
+                "현재 저장된 데이터에서 서류 항목과 직접 연결된 약관 원문 근거를 찾지 못해 "
+                "청구 서류 목록을 확정할 수 없습니다. 보험사에 접수 서류를 확인해 주세요."
+            )
+    else:
+        user_message = build_user_message(
+            request.question,
+            hits,
+            contract_info=contract_info,
+            history=turns,
+        )
+        answer = _call_llm(user_message, client=client)
 
     # 사고 정황이면 프론트가 현지 연락처를 함께 띄우도록 종류를 실어 보낸다.
     # responseType은 TEXT로 둔다 - 그 값을 바꾸면 프론트가 텍스트 대신 카드를
@@ -388,4 +429,5 @@ def answer_question(
         answer=answer,
         suggested_contacts=contacts,
         sources=build_sources(hits, cited),
+        claim_documents=claim_documents,
     )

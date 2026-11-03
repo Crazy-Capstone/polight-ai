@@ -42,6 +42,13 @@ SYSTEM_PROMPT = """당신은 여행자보험 약관에서 보장 항목 정보�
      자기부담금이 있음      -> "보험가입금액 한도, 자기부담금 공제 후 지급"
 3. exclusions의 sourceText와 sources의 quoteText는 반드시 제공된 조각의 원문을 그대로 옮기십시오.
    문장을 새로 만들지 마십시오.
+   requiredDocuments 각 항목에도 sourceChunkId와 sourceQuote를 넣으십시오.
+   sourceQuote는 그 서류 요건을 직접 뒷받침하는 약관 원문이어야 합니다.
+   근거가 되는 문장이 없으면 sourceChunkId와 sourceQuote를 null로 두고 항목을 만들지 마십시오.
+   requirementType은 REQUIRED(약관이 제출 의무를 명시), CONDITIONAL(특정 사고/상황에서 제출),
+   UNKNOWN(원문만으로 분류 불가) 중 하나입니다.
+   일반적으로 도움이 된다는 이유만으로 약관에 없는 서류를 requiredDocuments에 넣지 마십시오.
+   conditionText에는 조건부 제출의 발동 조건을 약관 내용으로만 적고, 그 외에는 null입니다.
 4. sources에는 실제로 근거가 된 조각의 chunkId만 넣으십시오.
    sourceRole은 보장 근거면 COVERAGE, 면책 근거면 EXCLUSION,
    한도 근거면 LIMIT, 청구서류 근거면 DOCUMENT입니다.
@@ -75,7 +82,7 @@ OUTPUT_SCHEMA = """{
   "conditions": "보장 조건 요약 또는 null",
   "detailItems": [{"title": "이 담보에 포함되는 개별 보장 항목 (예: 입원의료비, 통원의료비)", "subtitle": "한 줄 설명 또는 null", "isCovered": true}],
   "subLimits": [{"label": "무엇에 대한 한도인지 (예: 1개당, 입원 1일당, 자기부담금)", "value": "화면에 표시할 값 (예: 20만원, 10%). 200자 이내", "limitAmount": "숫자로 쓸 수 있으면 정수, 아니면 null", "limitCurrency": "KRW 또는 USD", "description": "부연 설명 또는 null"}],
-  "requiredDocuments": [{"documentName": "서류명", "isMandatory": true}],
+  "requiredDocuments": [{"documentName": "서류명", "isMandatory": true, "requirementType": "REQUIRED | CONDITIONAL | UNKNOWN", "conditionText": null, "sourceChunkId": "청크 id", "sourceQuote": "약관 원문 그대로"}],
   "exclusions": [{"title": "면책 사유", "description": null, "sourceText": "약관 원문 그대로", "severity": "HIGH | MEDIUM | LOW"}],
   "sources": [{"chunkId": "청크 id", "sourceRole": "COVERAGE | EXCLUSION | LIMIT | DOCUMENT", "quoteText": "약관 원문 그대로"}]
 }"""
@@ -126,6 +133,24 @@ def repair_source_ids(item: CoverageItem, chunks: list[dict]) -> int:
             source.chunk_id = owner
             repaired += 1
 
+    # 서류별 근거도 담보 단위 근거와 같은 방식으로 원문이 있는 청크를 찾는다.
+    # 잘못된 인용은 다른 항목의 근거로 보이면 안 되므로 연결하지 않는다.
+    for document in item.required_documents:
+        quote = document.source_quote
+        if not quote or quote.strip().lower() == "null":
+            document.source_quote = None
+            document.source_chunk_id = None
+            continue
+        needle = _normalize(quote)
+        if document.source_chunk_id in by_id and needle in by_id[document.source_chunk_id]:
+            continue
+        owner = next((cid for cid, text in by_id.items() if needle in text), None)
+        if owner:
+            document.source_chunk_id = owner
+            repaired += 1
+        else:
+            document.source_chunk_id = None
+
     return repaired
 
 
@@ -144,6 +169,14 @@ def validate_against_source(item: CoverageItem, chunks: list[dict]) -> list[str]
             warnings.append(f"입력에 없는 chunkId를 인용: {source.chunk_id}")
         elif source.quote_text and _normalize(source.quote_text) not in by_id[source.chunk_id]:
             warnings.append(f"인용문이 해당 조각 원문에 없음: {source.chunk_id}")
+
+    for document in item.required_documents:
+        if document.source_quote and document.source_chunk_id not in by_id:
+            warnings.append(f"서류 근거에 입력에 없는 chunkId를 인용: {document.source_chunk_id}")
+        elif document.source_quote and _normalize(document.source_quote) not in by_id[document.source_chunk_id]:
+            warnings.append(f"서류 인용문이 해당 조각 원문에 없음: {document.document_name}")
+        if document.requirement_type == "CONDITIONAL" and not document.condition_text:
+            warnings.append(f"조건부 서류의 조건이 비어 있음: {document.document_name}")
 
     for exclusion in item.exclusions:
         if exclusion.source_text and _normalize(exclusion.source_text) not in corpus:

@@ -60,6 +60,20 @@ class SourceChunk(CamelModel):
     cited: bool = False
 
 
+class ClaimDocument(CamelModel):
+    """약관 근거가 서류별로 저장된 경우의 체크리스트 한 항목."""
+
+    document_name: str
+    requirement_type: Literal["REQUIRED", "CONDITIONAL", "UNKNOWN"]
+    condition_text: str | None = None
+    coverage_title: str
+    source_chunk_id: str
+    source_quote: str
+    section_title: str = ""
+    page_start: int | None = None
+    page_end: int | None = None
+
+
 # 대화 이력 1턴.
 #
 # Spring이 chat_messages에서 최근 6개(3턴)를 잘라 실어 보낸다. Python이 DB를 조회하지
@@ -176,3 +190,6 @@ class RagQueryResponse(CamelModel):
     suggested_contacts: list[Literal["HOSPITAL", "POLICE", "EMBASSY"]] = []
 
     sources: list[SourceChunk]
+    # 체크리스트는 원문 출처와 연결된 항목만 담는다. LLM이 일반 상식으로 만든
+    # 준비 권장 서류는 이 필드에 들어오지 않는다.
+    claim_documents: list[ClaimDocument] = []

@@ -141,3 +141,7 @@ class VectorRepository(Protocol):
     def get_by_ids(self, chunk_ids: list[str]) -> list[ChunkHit]:
         """chunk_id로 직접 조회한다. 보상 조항에 딸린 면책 조항(related_chunk_id)을 끌어올 때 쓴다."""
         ...
+
+    def get_required_documents_for_chunks(self, chunk_ids: list[str]) -> list[dict]:
+        """검색된 약관 청크를 출처로 연결한 청구서류만 반환한다."""
+        ...

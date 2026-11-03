@@ -6,7 +6,7 @@ DB 접속 없이 검증할 수 있도록 순수 함수로 분리했다(pg_mapper
   policy_terms                    약관 한 건
   policy_terms_chunks             본문 청크 (policy_chunks에서 주인 컬럼 빼고 terms_id)
   policy_terms_coverages          약관상 보장 규칙
-  자식 4종 + policy_terms_coverage_sources
+  자식 4종 + policy_terms_coverage_sources + required_document_sources
 """
 
 from datetime import date, datetime, timezone
@@ -135,12 +135,13 @@ def chunk_rows(
 def coverage_rows(
     terms_id: UUID,
     items: list,
+    chunk_id_map: dict[str, UUID] | None = None,
     now: datetime | None = None,
 ) -> dict:
     """CoverageItem 목록을 규칙+자식 행들로 변환한다.
 
     반환: {"coverages": [...], "detail_items": [...], "sub_limits": [...],
-           "required_documents": [...], "exclusions": [...]}
+           "required_documents": [...], "required_document_sources": [...], "exclusions": [...]}
     각 자식은 terms_coverage_id로 부모에 매인다.
 
     title은 약관 인쇄명 그대로 넣는다(수식 없이). 백엔드가 이 값으로 증권 담보를
@@ -153,6 +154,7 @@ def coverage_rows(
         "detail_items": [],
         "sub_limits": [],
         "required_documents": [],
+        "required_document_sources": [],
         "exclusions": [],
     }
 
@@ -190,9 +192,22 @@ def coverage_rows(
                 )
             )
         for i, r in enumerate(item.required_documents):
-            out["required_documents"].append(
-                (uuid4(), cov_id, _cut(r.document_name, "document_name"), r.is_mandatory, i)
+            document_id = uuid4()
+            requirement_type = r.requirement_type or (
+                "REQUIRED" if r.is_mandatory else "UNKNOWN"
             )
+            out["required_documents"].append(
+                (
+                    document_id, cov_id, _cut(r.document_name, "document_name"),
+                    requirement_type == "REQUIRED", requirement_type,
+                    r.condition_text, i,
+                )
+            )
+            db_chunk_id = (chunk_id_map or {}).get(r.source_chunk_id) if r.source_chunk_id else None
+            if db_chunk_id and r.source_quote:
+                out["required_document_sources"].append(
+                    (uuid4(), document_id, db_chunk_id, r.source_quote, now, now)
+                )
         for i, e in enumerate(item.exclusions):
             out["exclusions"].append(
                 (

@@ -44,7 +44,8 @@ def _log_request_shape(raw: dict) -> None:
     summary="약관 질의응답",
     description="질문을 임베딩해 해당 계약(policyId)의 약관 청크를 검색하고, "
     "보장 조항에 짝지어진 면책 조항을 함께 근거로 넣어 답변을 생성한다. "
-    "응답의 sources는 LLM이 생성한 문장이 아니라 검색된 원문에서 잘라낸 인용이다.",
+    "응답의 sources는 LLM이 생성한 문장이 아니라 검색된 원문에서 잘라낸 인용이다. "
+    "청구 서류 질문에는 약관 원문 근거가 저장된 claimDocuments를 별도로 반환한다.",
 )
 async def query_policy(
     request: RagQueryRequest,

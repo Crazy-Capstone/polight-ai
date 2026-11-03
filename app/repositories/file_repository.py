@@ -181,6 +181,10 @@ class FileVectorRepository:
         # score는 유사도 검색으로 얻은 값이 아니므로 0.0으로 둔다
         return [self._to_hit(self._by_id[cid], 0.0) for cid in chunk_ids if cid in self._by_id]
 
+    def get_required_documents_for_chunks(self, chunk_ids: list[str]) -> list[dict]:
+        # 로컬 파일 청크에는 DB 서류 provenance 관계가 없으므로 체크리스트를 만들지 않는다.
+        return []
+
     # ── 내부 ─────────────────────────────────────────────────
 
     def _ensure_loaded(self) -> None:

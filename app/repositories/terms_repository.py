@@ -11,6 +11,7 @@ FK 삭제 순서가 강제된다:
 """
 
 import logging
+import re
 from uuid import UUID
 
 import psycopg2
@@ -47,7 +48,14 @@ VALUES %s
 """
 
 _DOC_INSERT = """
-INSERT INTO required_documents (id, terms_coverage_id, document_name, is_mandatory, sort_order)
+INSERT INTO required_documents
+    (id, terms_coverage_id, document_name, is_mandatory, requirement_type, condition_text, sort_order)
+VALUES %s
+"""
+
+_DOC_SOURCE_INSERT = """
+INSERT INTO required_document_sources
+    (id, required_document_id, terms_chunk_id, quote_text, created_at, updated_at)
 VALUES %s
 """
 
@@ -63,6 +71,12 @@ VALUES %s
 _DELETE_SQL = """
 DELETE FROM policy_terms_coverage_sources
  WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+DELETE FROM required_document_sources
+ WHERE required_document_id IN (
+     SELECT d.id FROM required_documents d
+     JOIN policy_terms_coverages c ON c.id = d.terms_coverage_id
+     WHERE c.terms_id = %(tid)s
+ );
 DELETE FROM coverage_detail_items
  WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
 DELETE FROM sub_coverage_limits
@@ -140,6 +154,8 @@ class TermsRepository:
             execute_values(cur, _SUBLIMIT_INSERT, tree["sub_limits"])
         if tree["required_documents"]:
             execute_values(cur, _DOC_INSERT, tree["required_documents"])
+        if tree["required_document_sources"]:
+            execute_values(cur, _DOC_SOURCE_INSERT, tree["required_document_sources"])
         if tree["exclusions"]:
             execute_values(cur, _EXCLUSION_INSERT, tree["exclusions"])
 
@@ -151,6 +167,12 @@ class TermsRepository:
     _DELETE_COVERAGES = """
     DELETE FROM policy_terms_coverage_sources
      WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
+    DELETE FROM required_document_sources
+     WHERE required_document_id IN (
+         SELECT d.id FROM required_documents d
+         JOIN policy_terms_coverages c ON c.id = d.terms_coverage_id
+         WHERE c.terms_id = %(tid)s
+     );
     DELETE FROM coverage_detail_items
      WHERE terms_coverage_id IN (SELECT id FROM policy_terms_coverages WHERE terms_id = %(tid)s);
     DELETE FROM sub_coverage_limits
@@ -243,6 +265,33 @@ class TermsRepository:
                     }
                     for row in cur.fetchall()
                 ]
+        finally:
+            conn.close()
+
+    def map_source_chunk_ids(self, terms_id: UUID, source_chunks: list[dict]) -> dict[str, UUID]:
+        """원본 JSON 청크 ID를 DB 청크 UUID로 연결한다.
+
+        chunk_rows는 원본 목록 순서대로 chunk_index를 만들므로 같은 목록 순서를
+        기준으로 매핑한다. 원본 ID 문자열 자체는 DB의 UUID PK가 아니다.
+        """
+        conn = self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT chunk_index, id, content FROM policy_terms_chunks WHERE terms_id = %s",
+                    (terms_id,),
+                )
+                db_rows = {index: (chunk_id, content) for index, chunk_id, content in cur.fetchall()}
+            return {
+                chunk["chunk_id"]: db_rows[index][0]
+                for index, chunk in enumerate(source_chunks)
+                if (
+                    "chunk_id" in chunk
+                    and index in db_rows
+                    and re.sub(r"\s+", "", chunk.get("text") or "")
+                    == re.sub(r"\s+", "", db_rows[index][1] or "")
+                )
+            }
         finally:
             conn.close()
 

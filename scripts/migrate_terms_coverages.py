@@ -59,13 +59,17 @@ def process_one(repo: TermsRepository, entry: dict, provider: str | None, dry_ru
     for w in warnings:
         print(f"    경고: {w}")
 
-    tree = terms_mapper.coverage_rows(terms_id, items)
+    # 추출 JSON의 chunk_id 문자열은 DB PK가 아니므로, 같은 입력 순서의 chunk_index로
+    # policy_terms_chunks UUID와 연결한 뒤 서류별 출처를 저장한다.
+    chunk_id_map = repo.map_source_chunk_ids(terms_id, chunks)
+    tree = terms_mapper.coverage_rows(terms_id, items, chunk_id_map=chunk_id_map)
     summary = {
         "terms": stem, "terms_id": str(terms_id),
         "rules": len(tree["coverages"]),
         "detail": len(tree["detail_items"]),
         "sub": len(tree["sub_limits"]),
         "doc": len(tree["required_documents"]),
+        "doc_sources": len(tree["required_document_sources"]),
         "excl": len(tree["exclusions"]),
     }
     if dry_run:
@@ -97,9 +101,9 @@ def main() -> None:
             raise SystemExit(f"레지스트리에 없는 약관: {args.terms}")
 
     repo = TermsRepository(dsn)
-    print(f"{'약관':22} {'규칙':>5} {'세부':>5} {'한도':>5} {'서류':>5} {'면책':>5}")
-    print("-" * 62)
-    total = {"rules": 0, "detail": 0, "sub": 0, "doc": 0, "excl": 0}
+    print(f"{'약관':22} {'규칙':>5} {'세부':>5} {'한도':>5} {'서류':>5} {'근거':>5} {'면책':>5}")
+    print("-" * 70)
+    total = {"rules": 0, "detail": 0, "sub": 0, "doc": 0, "doc_sources": 0, "excl": 0}
     for entry in entries:
         r = process_one(repo, entry, args.provider, args.dry_run)
         if r.get("skipped"):
@@ -108,10 +112,10 @@ def main() -> None:
         for k in total:
             total[k] += r[k]
         tag = " (dry-run)" if r.get("dry_run") else ""
-        print(f"{r['terms']:22} {r['rules']:>5} {r['detail']:>5} {r['sub']:>5} {r['doc']:>5} {r['excl']:>5}{tag}")
+        print(f"{r['terms']:22} {r['rules']:>5} {r['detail']:>5} {r['sub']:>5} {r['doc']:>5} {r['doc_sources']:>5} {r['excl']:>5}{tag}")
 
-    print("-" * 62)
-    print(f"{'합계':22} {total['rules']:>5} {total['detail']:>5} {total['sub']:>5} {total['doc']:>5} {total['excl']:>5}")
+    print("-" * 70)
+    print(f"{'합계':22} {total['rules']:>5} {total['detail']:>5} {total['sub']:>5} {total['doc']:>5} {total['doc_sources']:>5} {total['excl']:>5}")
     print("\n완료." + (" (dry-run - 넣지 않음)" if args.dry_run else ""))
 
 

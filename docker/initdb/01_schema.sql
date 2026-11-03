@@ -222,10 +222,28 @@ CREATE TABLE required_documents (
     terms_coverage_id UUID NOT NULL,
     document_name VARCHAR(200) NOT NULL,
     is_mandatory BOOLEAN NOT NULL,
+    requirement_type VARCHAR(20) NOT NULL DEFAULT 'REQUIRED',
+    condition_text TEXT,
     sort_order INTEGER NOT NULL,
+    CONSTRAINT ck_required_documents_requirement_type CHECK (requirement_type IN ('REQUIRED', 'CONDITIONAL', 'UNKNOWN')),
     CONSTRAINT fk_required_documents_terms_coverage_id FOREIGN KEY (terms_coverage_id) REFERENCES policy_terms_coverages(id)
 );
 CREATE INDEX idx_required_documents_terms_sort ON required_documents(terms_coverage_id, sort_order);
+
+-- 서류 단위 원문 근거. 담보 전체의 citations만으로는 어떤 인용이 어느 서류를
+-- 뒷받침하는지 알 수 없어 별도 연결 테이블로 둔다.
+CREATE TABLE required_document_sources (
+    id UUID PRIMARY KEY,
+    required_document_id UUID NOT NULL,
+    terms_chunk_id UUID NOT NULL,
+    quote_text TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_required_document_sources_document_id FOREIGN KEY (required_document_id) REFERENCES required_documents(id) ON DELETE CASCADE,
+    CONSTRAINT fk_required_document_sources_chunk_id FOREIGN KEY (terms_chunk_id) REFERENCES policy_terms_chunks(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_required_document_sources_document ON required_document_sources(required_document_id);
+CREATE INDEX idx_required_document_sources_chunk ON required_document_sources(terms_chunk_id);
 
 CREATE TABLE exclusion_conditions (
     id UUID PRIMARY KEY,

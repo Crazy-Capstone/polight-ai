@@ -7,6 +7,7 @@ payload가 되므로, 컬럼과 1:1로 맞춰두면 매핑 레이어가 필요 �
   coverage_detail_items  <- detail_items
   sub_coverage_limits    <- sub_limits
   required_documents     <- required_documents
+  required_document_sources <- 서류별 원문 인용
   exclusion_conditions   <- exclusions
   coverage_item_sources  <- sources
 """
@@ -29,6 +30,9 @@ CoverageStatus = Literal[
 
 # exclusion_conditions.severity VARCHAR(20)
 Severity = Literal["HIGH", "MEDIUM", "LOW"]
+
+# required_documents.requirement_type VARCHAR(20)
+DocumentRequirement = Literal["REQUIRED", "CONDITIONAL", "UNKNOWN"]
 
 # coverage_item_sources.source_role VARCHAR(30)
 # 같은 청크가 역할을 달리해 여러 번 연결될 수 있다(UNIQUE 제약이 item+chunk+role).
@@ -53,6 +57,14 @@ class SubCoverageLimit(CamelModel):
 class RequiredDocument(CamelModel):
     document_name: str
     is_mandatory: bool = True
+    # Old extraction payloads only have is_mandatory; the mapper translates those
+    # to REQUIRED/UNKNOWN instead of guessing that false means conditional.
+    requirement_type: DocumentRequirement | None = None
+    condition_text: str | None = None
+    # The source chunk ID here is the stable ID from data/chunks/*.json. The mapper
+    # translates it to policy_terms_chunks.id before persistence.
+    source_chunk_id: str | None = None
+    source_quote: str | None = None
 
 
 class ExclusionCondition(CamelModel):

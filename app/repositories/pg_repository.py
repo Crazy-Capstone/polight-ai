@@ -338,6 +338,49 @@ class PgVectorRepository:
             cursor.execute(BY_IDS_SQL, {"ids": list(chunk_ids)})
             return [self._to_hit(row) for row in cursor.fetchall()]
 
+    def get_required_documents_for_chunks(self, chunk_ids: list[str]) -> list[dict]:
+        """검색 결과 청크에 직접 연결된 서류와 원문 출처를 읽는다.
+
+        새 provenance 스키마를 아직 배포하지 않은 환경에서도 일반 RAG 답변은
+        계속 제공되도록, 새 테이블/컬럼이 없거나 읽기 권한이 없으면 빈 목록을 돌려준다.
+        """
+        if not chunk_ids:
+            return []
+
+        sql = """
+        SELECT d.document_name, d.requirement_type, d.condition_text, c.title,
+               s.terms_chunk_id, s.quote_text, t.section_title, t.page_start, t.page_end
+          FROM required_document_sources s
+          JOIN required_documents d ON d.id = s.required_document_id
+          JOIN policy_terms_coverages c ON c.id = d.terms_coverage_id
+          JOIN policy_terms_chunks t ON t.id = s.terms_chunk_id
+         WHERE s.terms_chunk_id = ANY(%(ids)s::uuid[])
+         ORDER BY array_position(%(ids)s::uuid[], s.terms_chunk_id), c.sort_order, d.sort_order
+        """
+        try:
+            with self._cursor() as cursor:
+                cursor.execute(sql, {"ids": chunk_ids})
+                rows = cursor.fetchall()
+        except (psycopg2.errors.UndefinedTable, psycopg2.errors.UndefinedColumn,
+                psycopg2.errors.InsufficientPrivilege) as exc:
+            logger.warning("서류별 약관 근거를 읽지 못해 체크리스트를 생략합니다: %s", exc)
+            return []
+
+        return [
+            {
+                "document_name": row[0],
+                "requirement_type": row[1],
+                "condition_text": row[2],
+                "coverage_title": row[3] or "",
+                "source_chunk_id": str(row[4]),
+                "source_quote": row[5],
+                "section_title": row[6] or "",
+                "page_start": row[7],
+                "page_end": row[8],
+            }
+            for row in rows
+        ]
+
 
     @staticmethod
     def _to_hit(row: tuple) -> ChunkHit:
