@@ -109,6 +109,11 @@ class RagQueryRequest(CamelModel):
     trip_id: str
     question: str
 
+    # 백엔드가 증권 상태를 명시적으로 전달한다. terms_id가 없는 이유만으로는
+    # 미등록·분석 중·분석 실패를 구분할 수 없으므로 별도 상태가 필요하다.
+    # 필드가 없으면 기존 요청 경로를 유지해 배포 순서와 호환되게 한다.
+    certificate_status: Literal["UNREGISTERED", "ANALYZING", "FAILED", "COMPLETED"] | None = None
+
     # 검색 범위. document_id가 있으면 그 약관만, 없으면 trip_id로 여행 단위로 넓힌다.
     #
     # policy_id로 필터하지 않는다. 백엔드가 policies 테이블을 없앴고(V12) 이 값은 항상
