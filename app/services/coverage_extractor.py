@@ -374,8 +374,8 @@ def extract_all(
                 client=client, model=model, provider=provider
             )
         except Exception as e:
-            warnings.append(f"{category}: 추출 실패 ({e})")
-            logger.warning("%s 추출 실패: %s", category, e)
+            warnings.append(f"{category}: 추출 실패 ({type(e).__name__})")
+            logger.warning("%s 추출 실패 (error_type=%s)", category, type(e).__name__)
             continue
 
         if item:

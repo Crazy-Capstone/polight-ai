@@ -134,7 +134,7 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
     # 것보다 나쁘다 - limitLabel에 원문이 남으므로 화면 표시는 그대로고,
     # 챗봇은 금액을 단정하지 않고 증권 원문을 보라고 답한다.
     if any(mark in raw for mark in AMBIGUOUS_MARKS):
-        logger.info("단일 한도로 환산할 수 없는 표현입니다: %r", text)
+        logger.info("단일 한도로 환산할 수 없는 표현입니다 (length=%d)", len(text))
         return None, currency
 
     # 괄호 주석("(정액)")과 통화 표기를 걷어낸다. 숫자와 단위만 남긴다.
@@ -145,7 +145,7 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
     cleaned = cleaned.replace(",", "").strip()
 
     if not re.search(r"\d", cleaned):
-        logger.info("금액을 읽지 못했습니다: %r", text)
+        logger.info("금액을 읽지 못했습니다 (length=%d)", len(text))
         return None, currency
 
     # "3억5천만" 처럼 단위가 겹쳐 나올 수 있어 앞에서부터 누적한다.
@@ -161,7 +161,7 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
         try:
             total += float(head) * multiplier
         except ValueError:
-            logger.info("금액 단위를 읽지 못했습니다: %r", text)
+            logger.info("금액 단위를 읽지 못했습니다 (length=%d)", len(text))
             return None, currency
 
     tail = remainder.strip()
@@ -171,7 +171,7 @@ def parse_amount(text: str | None) -> tuple[int | None, str | None]:
         except ValueError:
             # 단위 뒤에 설명이 붙은 경우("100만원 한도")는 이미 읽은 값을 쓴다
             if total == 0:
-                logger.info("금액을 읽지 못했습니다: %r", text)
+                logger.info("금액을 읽지 못했습니다 (length=%d)", len(text))
                 return None, currency
 
     return int(total), currency
@@ -617,7 +617,7 @@ def _as_date(value: object) -> str | None:
         return date(year, month, day).isoformat()
     except ValueError:
         # 2026-13-45 같은 값. 틀린 날짜를 NOT NULL 컬럼에 넣는 것보다 비우는 편이 낫다.
-        logger.info("보험기간을 날짜로 읽지 못했습니다: %r", value)
+        logger.info("보험기간을 날짜로 읽지 못했습니다")
         return None
 
 

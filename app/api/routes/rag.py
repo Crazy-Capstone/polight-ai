@@ -23,15 +23,16 @@ def _log_request_shape(raw: dict) -> None:
     if isinstance(terms, str):
         terms_repr = f"len={len(terms)}" if terms else "빈문자열"
     else:
-        terms_repr = repr(terms)
+        terms_repr = f"type={type(terms).__name__}"
     if "coverages" in raw:
         cov = raw["coverages"]
-        cov_repr = f"개수={len(cov)}" if isinstance(cov, list) else repr(cov)
+        cov_repr = f"개수={len(cov)}" if isinstance(cov, list) else f"type={type(cov).__name__}"
     else:
         cov_repr = "<<키없음>>"
     logger.info(
-        "챗봇 요청 진단: termsId=%s, coverages=%s, coveragesComplete=%s, 최상위키=%s",
-        terms_repr, cov_repr, raw.get("coveragesComplete", raw.get("coverages_complete", "<<키없음>>")),
+        "챗봇 요청 진단: termsId=%s, coverages=%s, coveragesCompleteType=%s, 최상위키=%s",
+        terms_repr, cov_repr,
+        type(raw.get("coveragesComplete", raw.get("coverages_complete"))).__name__,
         sorted(raw.keys()),
     )
 
@@ -56,5 +57,5 @@ async def query_policy(
     try:
         _log_request_shape(await http_request.json())
     except Exception as exc:  # 로깅 실패가 요청을 죽이면 안 된다
-        logger.warning("요청 진단 로깅 실패: %s", exc)
+        logger.warning("요청 진단 로깅 실패 (error_type=%s)", type(exc).__name__)
     return answer_question(request, repository)

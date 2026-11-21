@@ -215,7 +215,10 @@ def check_certificate(
         return verdict
 
     except Exception as exc:
-        logger.warning("약관 대조에 실패했습니다(분석은 계속): %s", exc)
+        logger.warning(
+            "약관 대조에 실패했습니다(분석은 계속, error_type=%s)",
+            type(exc).__name__,
+        )
         return UNKNOWN
 
 
@@ -228,4 +231,4 @@ def record_missing_terms_id() -> None:
     try:
         _append({"verdict": NO_TERMS_ID})
     except Exception as exc:
-        logger.warning("termsId 없음 기록에 실패했습니다: %s", exc)
+        logger.warning("termsId 없음 기록에 실패했습니다 (error_type=%s)", type(exc).__name__)

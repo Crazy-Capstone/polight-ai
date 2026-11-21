@@ -77,17 +77,25 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
             return pdf_path
         except httpx.HTTPError as e:
             last_error = e
+            status_code = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
             # 4xx는 다시 받아도 같다. 주소가 틀렸거나 만료됐거나 권한이 없다.
             if isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500:
+                logger.warning(
+                    "PDF 다운로드 실패 (documentId=%s, attempt=%d, status=%s, error_type=%s)",
+                    document_id, attempt, status_code, type(e).__name__,
+                )
                 break
+            logger.warning(
+                "PDF 다운로드 실패 (documentId=%s, attempt=%d, status=%s, error_type=%s)",
+                document_id, attempt, status_code, type(e).__name__,
+            )
             if attempt < DOWNLOAD_MAX_ATTEMPTS:
-                logger.warning("PDF 내려받기 실패 (%d/%d): %s", attempt, DOWNLOAD_MAX_ATTEMPTS, e)
                 time.sleep(2.0 * attempt)
 
     # 주소를 사용자 문구에 넣지 않는다. presigned URL에는 서명이 붙어 있고,
     # 실패 사유는 analysis_results.failure_reason에 영구 저장된 뒤 화면에 뜬다.
     raise AnalysisFailure(
-        f"PDF를 내려받지 못했습니다 ({download_url}): {last_error}",
+        f"PDF 다운로드 실패 (documentId={document_id}, error_type={type(last_error).__name__})",
         user_message="문서를 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.",
     )
 
@@ -116,7 +124,7 @@ def _unlock_or_reject(pdf_path: Path, password: str | None) -> None:
         doc = fitz.open(pdf_path)
     except Exception as e:
         # 열지도 못하는 것은 다른 문제다(손상·PDF 아님). 뒤 단계에서 드러난다.
-        logger.warning("PDF를 열어보지 못해 잠금 여부를 확인하지 못했습니다: %s", e)
+        logger.warning("PDF 잠금 상태 확인 실패 (error_type=%s)", type(e).__name__)
         return
 
     unlocked: Path | None = None
@@ -222,7 +230,10 @@ def _remove_quietly(path: Path) -> None:
         path.unlink(missing_ok=True)
         logger.info("내려받은 증권 삭제: %s", path.name)
     except OSError as e:
-        logger.warning("내려받은 증권을 지우지 못했습니다 (%s): %s", path, e)
+        logger.warning(
+            "내려받은 증권 삭제 실패 (file=%s, error_type=%s)",
+            path.name, type(e).__name__,
+        )
 
 
 # 두께로 증권과 약관을 가르려 했으나 폐기했다.
@@ -240,7 +251,7 @@ def _page_count(pdf_path: Path) -> int | None:
         with fitz.open(pdf_path) as doc:
             return doc.page_count
     except Exception as e:
-        logger.warning("페이지 수를 세지 못했습니다: %s", e)
+        logger.warning("페이지 수 확인 실패 (error_type=%s)", type(e).__name__)
         return None
 
 
@@ -412,14 +423,19 @@ def process_analysis(
             scope=scope,
         )
     except AnalysisFailure as e:
-        # 사용자에게는 e.user_message만 나간다. 원인은 위 traceback에 남는다.
-        logger.exception("분석 실패: %s", request.analysis_result_id)
+        # 예외 메시지와 traceback에는 URL·문서 내용이 포함될 수 있어 유형만 기록한다.
+        logger.error(
+            "분석 실패 (analysisResultId=%s, error_type=%s)",
+            request.analysis_result_id, type(e).__name__,
+        )
         _safe_notify_fail(request.analysis_result_id, e.user_message)
         return
-    except Exception:
-        # 우리가 예상하지 못한 예외다. 메시지에 무엇이 들어 있을지 알 수 없으니
-        # 사용자에게 보내지 않는다. 추적은 traceback과 analysisResultId로 한다.
-        logger.exception("분석 실패 (예상하지 못한 오류): %s", request.analysis_result_id)
+    except Exception as e:
+        # 예상하지 못한 예외도 메시지와 traceback 대신 식별자·유형만 기록한다.
+        logger.error(
+            "예상하지 못한 분석 실패 (analysisResultId=%s, error_type=%s)",
+            request.analysis_result_id, type(e).__name__,
+        )
         _safe_notify_fail(request.analysis_result_id, AnalysisFailure.user_message)
         return
 

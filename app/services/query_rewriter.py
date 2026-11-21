@@ -79,7 +79,7 @@ def _clean(rewritten: str, original: str) -> str:
     text = re.sub(r"^(재작성|질문|다시 쓴 질문)\s*[:：]\s*", "", text)
 
     if not text or len(text) > MAX_REWRITE_CHARS:
-        logger.warning("재작성 결과를 쓸 수 없어 원문을 씁니다: %r", rewritten[:80])
+        logger.warning("재작성 결과를 쓸 수 없어 원문으로 대체합니다 (length=%d)", len(text))
         return original
     return text
 
@@ -101,10 +101,10 @@ def rewrite(question: str, history: list[dict]) -> str:
     except Exception as e:
         # 재작성 실패가 질의 전체 실패가 되면 안 된다.
         # 원문으로 검색하면 정확도는 떨어져도 답은 나간다.
-        logger.warning("질의 재작성 실패, 원문으로 검색합니다: %s", e)
+        logger.warning("질의 재작성 실패, 원문으로 검색합니다 (error_type=%s)", type(e).__name__)
         return question
 
     result = _clean(rewritten, question)
     if result != question:
-        logger.info("질의 재작성 (%.1f초): %r -> %r", seconds, question, result)
+        logger.info("질의 재작성 완료 (%.1f초)", seconds)
     return result

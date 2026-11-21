@@ -109,8 +109,8 @@ def _read_output(job) -> dict:
         result = json.loads(text)
     except json.JSONDecodeError as e:
         raise CertificateAnalysisError(
-            f"증권 분석 결과가 JSON이 아닙니다 (job {job.id}): {text[:200]}"
-        ) from e
+            f"증권 분석 결과가 JSON이 아닙니다 (job {job.id}, position {e.pos})"
+        ) from None
 
     if not isinstance(result, dict):
         raise CertificateAnalysisError(
@@ -124,8 +124,13 @@ def analyze_certificate(pdf_path: Path, client: OpenAI | None = None) -> dict:
     settings = get_settings()
     client = client or _client()
 
-    with pdf_path.open("rb") as f:
-        uploaded = client.files.create(file=f, purpose="user_data")
+    try:
+        with pdf_path.open("rb") as f:
+            uploaded = client.files.create(file=f, purpose="user_data")
+    except Exception as e:
+        raise CertificateAnalysisError(
+            f"증권 업로드 실패 (error_type={type(e).__name__})"
+        ) from None
     logger.info("증권 업로드 완료: %s (%s)", uploaded.id, pdf_path.name)
 
     try:
@@ -161,15 +166,22 @@ def analyze_certificate(pdf_path: Path, client: OpenAI | None = None) -> dict:
 
         return _read_output(job)
 
+    except CertificateAnalysisError:
+        raise
+    except Exception as e:
+        # SDK 오류에는 요청·응답 조각이 포함될 수 있으므로 원문을 예외로 전파하지 않는다.
+        raise CertificateAnalysisError(
+            f"증권 분석 API 호출 실패 (error_type={type(e).__name__})"
+        ) from None
+
     finally:
         # 증권에는 이름·생년월일·증권번호가 들어 있다. 업로드한 파일은 지울 때까지
         # 남으므로 반드시 지운다. 삭제 실패로 분석 결과를 버릴 수는 없으니 예외는 삼킨다.
         try:
             client.files.delete(uploaded.id)
             logger.info("업로드한 증권 삭제: %s", uploaded.id)
-        except Exception:
+        except Exception as e:
             logger.warning(
-                "업로드한 증권을 지우지 못했습니다: %s. 개인정보가 남아 있으니 "
-                "콘솔에서 확인하십시오.",
-                uploaded.id,
+                "업로드한 증권 삭제 실패 (file_id=%s, error_type=%s). 콘솔에서 확인하십시오.",
+                uploaded.id, type(e).__name__,
             )
