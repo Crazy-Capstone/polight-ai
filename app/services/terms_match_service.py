@@ -41,7 +41,10 @@ def _alias_index() -> dict[tuple, dict]:
     try:
         entries = load_registry()
     except (OSError, ValueError, KeyError) as exc:
-        logger.warning("레지스트리를 읽지 못해 별칭 없이 매칭합니다: %s", exc)
+        logger.warning(
+            "레지스트리를 읽지 못해 별칭 없이 매칭합니다 (error_type=%s)",
+            type(exc).__name__,
+        )
         return {}
     return {
         (normalize(e["insurer"]), normalize(e["product"]), e.get("revision") or ""): e

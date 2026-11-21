@@ -116,7 +116,10 @@ def test_download_does_not_retry_4xx(monkeypatch, tmp_path):
     monkeypatch.setattr(analysis_service, "RAW_PDF_DIR", tmp_path)
     monkeypatch.setattr(analysis_service, "get_settings", lambda: Settings())
 
-    with pytest.raises(RuntimeError, match="내려받지 못했습니다"):
+    with pytest.raises(RuntimeError) as exc_info:
         analysis_service._download_pdf("https://x.test/p.pdf", "doc-1")
 
     assert len(attempts) == 1
+    assert "documentId=doc-1" in str(exc_info.value)
+    assert "HTTPStatusError" in str(exc_info.value)
+    assert "https://x.test/p.pdf" not in str(exc_info.value)

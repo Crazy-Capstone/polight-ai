@@ -45,7 +45,7 @@ def _post(path: str, payload: dict) -> None:
 
     # 아직 백엔드 주소가 확정되지 않은 로컬 개발 단계에서는 호출을 건너뛰고 로그만 남긴다.
     if not settings.spring_base_url:
-        logger.warning("SPRING_BASE_URL이 설정되지 않아 콜백을 건너뜁니다: %s %s", path, payload)
+        logger.warning("SPRING_BASE_URL이 설정되지 않아 콜백을 건너뜁니다 (path=%s)", path)
         return
 
     url = f"{settings.spring_base_url.rstrip('/')}{path}"
@@ -60,23 +60,38 @@ def _post(path: str, payload: dict) -> None:
             response = httpx.post(url, json=payload, headers=headers, timeout=10.0)
             response.raise_for_status()
             if attempt > 1:
-                logger.info("Spring 콜백 %d번째 시도에 성공: %s", attempt, url)
+                logger.info("Spring 콜백 재시도 성공 (attempt=%d, path=%s)", attempt, path)
             return
         except httpx.HTTPError as e:
             last_error = e
+            status_code = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
             if not _should_retry(e):
-                logger.error("Spring 콜백 실패 (재시도해도 같은 결과, %s): %s", url, e)
+                logger.error(
+                    "Spring 콜백 실패 (재시도 불필요, path=%s, error_type=%s, status=%s)",
+                    path, type(e).__name__, status_code,
+                )
                 break
             if attempt < CALLBACK_MAX_ATTEMPTS:
                 delay = CALLBACK_BACKOFF_SECONDS * (2 ** (attempt - 1))
                 logger.warning(
-                    "Spring 콜백 실패 (%d/%d), %.0f초 후 재시도: %s",
-                    attempt, CALLBACK_MAX_ATTEMPTS, delay, e,
+                    "Spring 콜백 실패 (%d/%d), %.0f초 후 재시도 (path=%s, error_type=%s, status=%s)",
+                    attempt, CALLBACK_MAX_ATTEMPTS, delay, path, type(e).__name__, status_code,
                 )
                 time.sleep(delay)
 
-    logger.error("Spring 콜백 호출 실패 (%s): %s", url, last_error)
-    raise SpringCallbackError(f"{url} 호출 실패: {last_error}") from last_error
+    status_code = (
+        last_error.response.status_code
+        if isinstance(last_error, httpx.HTTPStatusError)
+        else None
+    )
+    error_type = type(last_error).__name__ if last_error is not None else "UnknownError"
+    logger.error(
+        "Spring 콜백 호출 실패 (path=%s, error_type=%s, status=%s)",
+        path, error_type, status_code,
+    )
+    raise SpringCallbackError(
+        f"Spring callback failed (error_type={error_type}, status={status_code})"
+    ) from None
 
 
 def notify_complete(callback: AnalysisCompleteCallback) -> None:
