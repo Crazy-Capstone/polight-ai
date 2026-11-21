@@ -357,6 +357,7 @@ def test_wrong_password_says_so(monkeypatch, captured, tmp_path):
     )
 
     assert "맞지 않습니다" in captured["fail"].error_message
+    assert not pdf.exists(), "비밀번호 오류 뒤에도 임시 PDF가 남아 있다"
 
 
 # 비밀번호가 로그·실패 사유·콜백에 섞여 나가면 안 된다.

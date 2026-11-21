@@ -6,6 +6,8 @@ services:
     image: 767918718624.dkr.ecr.ap-northeast-2.amazonaws.com/polight-ai:latest
     container_name: polight-ai
     env_file: .env
+    environment:
+      PDF_TEMP_DIR: /tmp/polight-ai-analysis
 
     mem_limit: 1g
     mem_reservation: 256m
@@ -16,6 +18,11 @@ services:
 
     volumes:
       - ai-data:/app/data
+
+    # 요청 처리 중인 원본 PDF만 두는 메모리 기반 임시 공간.
+    # /app/data의 영구 볼륨에 사용자 증권 PDF가 기록되지 않게 분리한다.
+    tmpfs:
+      - /tmp/polight-ai-analysis:rw,noexec,nosuid,size=256m,mode=0700
 
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health', timeout=3).status_code==200 else 1)\""]

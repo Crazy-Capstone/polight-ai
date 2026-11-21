@@ -1,5 +1,8 @@
 import json
 import logging
+import os
+import shutil
+import tempfile
 import time
 from pathlib import Path
 
@@ -27,6 +30,11 @@ from app.services.certificate_adapter import (
     to_payloads,
 )
 from app.services.certificate_analyzer import CertificateAnalysisError, analyze_certificate
+from app.services.certificate_privacy import (
+    redact,
+    sanitize_certificate_payloads,
+    sanitize_certificate_text,
+)
 from app.services.chunking_service import parse_and_chunk
 from app.services import terms_watch
 from app.services.coverage_extractor import extract_all
@@ -41,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_PDF_DIR = PROJECT_ROOT / "data" / "raw_pdfs"
+PDF_TEMP_ROOT = Path(
+    os.environ.get("PDF_TEMP_DIR", str(Path(tempfile.gettempdir()) / "polight-ai-analysis"))
+)
 
 
 # 약관 PDF를 받아온다.
@@ -55,14 +66,57 @@ RAW_PDF_DIR = PROJECT_ROOT / "data" / "raw_pdfs"
 DOWNLOAD_MAX_ATTEMPTS = 3
 
 
-def _download_pdf(download_url: str, document_id: str) -> Path:
-    RAW_PDF_DIR.mkdir(parents=True, exist_ok=True)
-    pdf_path = RAW_PDF_DIR / f"{document_id}.pdf"
+def _remove_quietly(path: Path) -> bool:
+    """파일이나 작업 디렉터리를 재시도해 삭제하고 성공 여부를 반환한다."""
+    for attempt in range(1, 4):
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink(missing_ok=True)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError as e:
+            if attempt < 3:
+                time.sleep(0.05 * attempt)
+                continue
+            logger.critical(
+                "임시 PDF 파일 삭제 실패 (path=%s, error_type=%s)",
+                path.name, type(e).__name__,
+            )
+            return False
+    return False
 
+
+def _cleanup_pdf_workspace(pdf_path: Path) -> bool:
+    """다운로드 PDF, 복호화 중간 파일, 요청별 작업 디렉터리를 정리한다."""
+    workspace = pdf_path.parent
+    try:
+        workspace.resolve().relative_to(PDF_TEMP_ROOT.resolve())
+    except (OSError, ValueError):
+        cleanup_ok = True
+        for candidate in (
+            pdf_path.with_suffix(".unlocked.pdf"),
+            pdf_path.with_suffix(".part"),
+            pdf_path,
+        ):
+            cleanup_ok = _remove_quietly(candidate) and cleanup_ok
+        return cleanup_ok
+    return _remove_quietly(workspace)
+
+
+def _download_pdf(download_url: str, document_id: str) -> Path:
+    # 사용자별 문서는 영구 데이터 볼륨이 아닌 요청별 임시 작업공간에 둔다.
+    # 고정 documentId 파일명을 쓰지 않아 동시 요청이 서로 덮어쓰지 않는다.
     settings = get_settings()
     headers = (
         {HEADER_NAME: settings.internal_api_key} if settings.internal_api_key else {}
     )
+    PDF_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
+    workspace = Path(tempfile.mkdtemp(prefix="request-", dir=PDF_TEMP_ROOT))
+    pdf_path = workspace / "document.pdf"
+    partial_path = workspace / "document.part"
 
     last_error: Exception | None = None
     for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
@@ -71,12 +125,15 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
                 "GET", download_url, headers=headers, timeout=60.0, follow_redirects=True
             ) as response:
                 response.raise_for_status()
-                with pdf_path.open("wb") as f:
+                with partial_path.open("wb") as f:
                     for data in response.iter_bytes():
                         f.write(data)
+            partial_path.replace(pdf_path)
             return pdf_path
         except httpx.HTTPError as e:
             last_error = e
+            _remove_quietly(partial_path)
+            _remove_quietly(pdf_path)
             status_code = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
             # 4xx는 다시 받아도 같다. 주소가 틀렸거나 만료됐거나 권한이 없다.
             if isinstance(e, httpx.HTTPStatusError) and 400 <= e.response.status_code < 500:
@@ -91,9 +148,16 @@ def _download_pdf(download_url: str, document_id: str) -> Path:
             )
             if attempt < DOWNLOAD_MAX_ATTEMPTS:
                 time.sleep(2.0 * attempt)
+        except Exception as e:
+            _cleanup_pdf_workspace(pdf_path)
+            raise AnalysisFailure(
+                f"PDF 다운로드 실패 (documentId={document_id}, error_type={type(e).__name__})",
+                user_message="문서를 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.",
+            ) from None
 
     # 주소를 사용자 문구에 넣지 않는다. presigned URL에는 서명이 붙어 있고,
     # 실패 사유는 analysis_results.failure_reason에 영구 저장된 뒤 화면에 뜬다.
+    _cleanup_pdf_workspace(pdf_path)
     raise AnalysisFailure(
         f"PDF 다운로드 실패 (documentId={document_id}, error_type={type(last_error).__name__})",
         user_message="문서를 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.",
@@ -151,13 +215,21 @@ def _unlock_or_reject(pdf_path: Path, password: str | None) -> None:
         # 복호화본을 만들어 원본 자리에 덮어쓴다. 뒤 단계와 정리 코드가 경로를
         # 하나만 알면 되도록 파일을 늘리지 않는다.
         unlocked = pdf_path.with_suffix(".unlocked.pdf")
-        doc.save(str(unlocked), encryption=fitz.PDF_ENCRYPT_NONE)
+        try:
+            doc.save(str(unlocked), encryption=fitz.PDF_ENCRYPT_NONE)
+        except Exception:
+            _remove_quietly(unlocked)
+            raise
     finally:
         # 윈도우에서는 열려 있는 파일을 덮어쓸 수 없어 먼저 닫는다.
         doc.close()
 
     if unlocked:
-        unlocked.replace(pdf_path)
+        try:
+            unlocked.replace(pdf_path)
+        except Exception:
+            _remove_quietly(unlocked)
+            raise
         logger.info("잠긴 PDF를 복호화했습니다: %s", pdf_path.name)
 
 
@@ -224,15 +296,24 @@ def _safe_notify_complete(
 CERTIFICATE_MAX_PAGES = 10
 
 
-def _remove_quietly(path: Path) -> None:
-    """파일을 지운다. 삭제 실패로 분석 결과를 버릴 수는 없으니 예외는 삼킨다."""
+def _archive_terms_pdf(pdf_path: Path, document_id: str) -> None:
+    """성공한 약관 PDF만 기존 재분석용 보관 경로에 복사한다."""
+    normalized_id = document_id.replace("\\", "/")
+    safe_id = normalized_id.rsplit("/", 1)[-1]
+    if not safe_id or safe_id in {".", ".."} or safe_id != document_id:
+        logger.warning("약관 PDF 보관을 건너뜁니다 (유효하지 않은 documentId)")
+        return
+
+    destination = RAW_PDF_DIR / f"{safe_id}.pdf"
     try:
-        path.unlink(missing_ok=True)
-        logger.info("내려받은 증권 삭제: %s", path.name)
+        RAW_PDF_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(pdf_path, destination)
+        logger.info("분석이 완료된 약관 PDF를 재분석용으로 보관했습니다 (documentId=%s)", safe_id)
     except OSError as e:
+        # 보관은 재분석용 편의 기능이다. 파싱·저장 성공을 실패로 바꾸지는 않는다.
         logger.warning(
-            "내려받은 증권 삭제 실패 (file=%s, error_type=%s)",
-            path.name, type(e).__name__,
+            "약관 PDF 재분석용 보관 실패 (documentId=%s, error_type=%s)",
+            safe_id, type(e).__name__,
         )
 
 
@@ -289,7 +370,12 @@ def _resolve_document_type(request: AnalysisStartRequest, pdf_path: Path) -> str
 # 카테고리별 추출(extract_all)이 7회 돌던 자리가 통째로 없어지고, 대신 Studio Agent가
 # 한 번 돈다. 금액도 이쪽에서만 얻을 수 있다 - 약관에는 "보험가입금액을 한도로"라고만
 # 적혀 있어, 실측에서 약관 추출 30건 중 금액이 채워진 것은 3건뿐이었다.
-def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
+def _process_certificate(
+    request: AnalysisStartRequest,
+    pdf_path: Path,
+    *,
+    notify_callback: bool = True,
+) -> AnalysisCompleteCallback:
     certificate = analyze_certificate(pdf_path)
 
     # 성공이든 실패든 한 줄 남긴다. 실패했을 때 이 줄이 유일한 단서이고,
@@ -297,7 +383,7 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
     # 값은 넣지 않는다(describe_structure 주석 참고).
     logger.info("증권 에이전트 출력 구조: %s", describe_structure(certificate))
 
-    payloads = to_payloads(certificate)
+    payloads = sanitize_certificate_payloads(certificate, to_payloads(certificate))
     if not payloads:
         if not looks_like_certificate(certificate):
             # 담보가 없는 것이 아니라 애초에 증권이 아니다. 이걸 "담보를 못
@@ -322,8 +408,11 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
             start_date, end_date,
         )
 
-    insurer_name = certificate.get("insurer_name")
-    product_name = certificate.get("product_name") or certificate.get("document_title")
+    insurer_name = sanitize_certificate_text(certificate.get("insurer_name"), certificate)
+    product_name = sanitize_certificate_text(
+        certificate.get("product_name") or certificate.get("document_title"),
+        certificate,
+    )
 
     # 이 증권의 약관을 우리가 갖고 있는지, 가입일에 맞는 판인지 대조해 기록한다.
     #
@@ -345,19 +434,22 @@ def _process_certificate(request: AnalysisStartRequest, pdf_path: Path) -> None:
         endDate=end_date,
         # 담보 목록이 표 전체인지. 폴백으로 만든 목록은 근거가 달라 켜지 않는다.
         coveragesComplete=coverages_complete(certificate),
-        rawResultJson=json.dumps(certificate, ensure_ascii=False),
+        # 백엔드 DTO 필드와 JSON 구조는 유지하고 민감한 값만 마스킹해 전송한다.
+        rawResultJson=json.dumps(redact(certificate, removed=[]), ensure_ascii=False),
     )
 
-    try:
-        spring_client.notify_complete(callback)
-    except SpringCallbackError:
-        logger.error("완료 콜백 전달 실패 (증권 분석 자체는 성공): %s", request.analysis_result_id)
+    if notify_callback:
+        try:
+            spring_client.notify_complete(callback)
+        except SpringCallbackError:
+            logger.error("완료 콜백 전달 실패 (증권 분석 자체는 성공): %s", request.analysis_result_id)
 
     logger.info(
         "증권 분석 완료: 담보 %d건, 금액 %d건 확보",
         len(payloads),
         sum(1 for p in payloads if p.limit_amount is not None),
     )
+    return callback
 
 
 def _safe_notify_fail(analysis_result_id: str, error_message: str) -> None:
@@ -388,6 +480,10 @@ def process_analysis(
         policy_id=request.policy_id,
     )
 
+    pdf_path: Path | None = None
+    chunks: list[dict] = []
+    certificate_callback: AnalysisCompleteCallback | None = None
+    failure_message: str | None = None
     try:
         pdf_path = _download_pdf(request.download_url, request.document_id)
 
@@ -399,44 +495,55 @@ def process_analysis(
 
         # 증권이면 여기서 끝난다. 청킹도 임베딩도 하지 않는다.
         # 증권은 화면에 뜰 담보 목록이지 챗봇이 검색할 근거가 아니다.
-        if _resolve_document_type(request, pdf_path) == "CERTIFICATE":
-            try:
-                _process_certificate(request, pdf_path)
-            finally:
-                # 내려받은 증권을 지운다.
-                #
-                # 약관은 재분석에 대비해 남겨두지만 증권은 개인정보다. 피보험자 이름·
-                # 생년월일·증권번호가 들어 있어 디스크에 쌓이면 안 된다.
-                #
-                # 남겨두면 다른 사고도 난다. 실제로 테스트 중에 내려받은 증권이
-                # raw_pdfs에 남아, 약관 색인 배치가 그것을 약관으로 오인해 청킹·임베딩까지
-                # 했다. 공유 약관 인덱스에 개인정보가 섞여 들어간 것이다.
-                _remove_quietly(pdf_path)
-            return
-
-        chunks = parse_and_chunk(pdf_path, scope=scope)
-        embeddings = embed_chunks(chunks)
-        repository.save(
-            chunks,
-            embeddings,
-            analysis_result_id=request.analysis_result_id,
-            scope=scope,
-        )
+        document_type = _resolve_document_type(request, pdf_path)
+        if document_type == "CERTIFICATE":
+            certificate_callback = _process_certificate(
+                request, pdf_path, notify_callback=False
+            )
+        else:
+            chunks = parse_and_chunk(pdf_path, scope=scope)
+            embeddings = embed_chunks(chunks)
+            repository.save(
+                chunks,
+                embeddings,
+                analysis_result_id=request.analysis_result_id,
+                scope=scope,
+            )
+            # 약관은 기존 재분석 경로를 위해 성공한 경우에만 영구 보관한다.
+            _archive_terms_pdf(pdf_path, request.document_id)
     except AnalysisFailure as e:
         # 예외 메시지와 traceback에는 URL·문서 내용이 포함될 수 있어 유형만 기록한다.
         logger.error(
             "분석 실패 (analysisResultId=%s, error_type=%s)",
             request.analysis_result_id, type(e).__name__,
         )
-        _safe_notify_fail(request.analysis_result_id, e.user_message)
-        return
+        failure_message = e.user_message
     except Exception as e:
         # 예상하지 못한 예외도 메시지와 traceback 대신 식별자·유형만 기록한다.
         logger.error(
             "예상하지 못한 분석 실패 (analysisResultId=%s, error_type=%s)",
             request.analysis_result_id, type(e).__name__,
         )
-        _safe_notify_fail(request.analysis_result_id, AnalysisFailure.user_message)
+        failure_message = AnalysisFailure.user_message
+
+    finally:
+        cleanup_ok = _cleanup_pdf_workspace(pdf_path) if pdf_path is not None else True
+        if not cleanup_ok:
+            logger.error(
+                "임시 PDF 정리 실패로 분석 완료 콜백을 보내지 않습니다 (analysisResultId=%s)",
+                request.analysis_result_id,
+            )
+            failure_message = AnalysisFailure.user_message
+
+    if failure_message is not None:
+        _safe_notify_fail(request.analysis_result_id, failure_message)
+        return
+
+    if certificate_callback is not None:
+        try:
+            spring_client.notify_complete(certificate_callback)
+        except SpringCallbackError:
+            logger.error("완료 콜백 전달 실패 (증권 분석 자체는 성공): %s", request.analysis_result_id)
         return
 
     # pgvector 저장소는 INSERT하며 policy_chunks.id(UUID)를 만들고 청크에 실어준다.

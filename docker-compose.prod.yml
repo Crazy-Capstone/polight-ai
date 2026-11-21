@@ -39,6 +39,8 @@ services:
 
     # 키와 DB 주소는 파일로 넘긴다. compose에 직접 쓰면 깃에 올라간다.
     env_file: .env
+    environment:
+      PDF_TEMP_DIR: /tmp/polight-ai-analysis
 
     # 메모리 상한.
     #
@@ -68,6 +70,11 @@ services:
     # 약관 1건당 약 3MB 쌓인다(PDF 2.4MB + 파싱 캐시 0.6MB).
     volumes:
       - ai-data:/app/data
+
+    # 요청 처리 중인 원본 PDF만 두는 메모리 기반 임시 공간.
+    # /app/data의 영구 볼륨에 사용자 증권 PDF가 기록되지 않게 분리한다.
+    tmpfs:
+      - /tmp/polight-ai-analysis:rw,noexec,nosuid,size=256m,mode=0700
 
     # 컨테이너가 살아 있어도 앱이 죽어 있을 수 있다. 헬스체크로 구분한다.
     # /health는 인증 없이 열려 있다.

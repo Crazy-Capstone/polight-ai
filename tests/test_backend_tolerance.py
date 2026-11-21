@@ -64,14 +64,16 @@ def test_download_carries_api_key(monkeypatch, tmp_path):
         return FakeStream()
 
     monkeypatch.setattr(analysis_service.httpx, "stream", fake_stream)
-    monkeypatch.setattr(analysis_service, "RAW_PDF_DIR", tmp_path)
+    monkeypatch.setattr(analysis_service, "PDF_TEMP_ROOT", tmp_path)
     monkeypatch.setattr(
         analysis_service, "get_settings", lambda: Settings(internal_api_key="k-1")
     )
 
-    analysis_service._download_pdf("https://x.test/p.pdf", "doc-1")
+    downloaded = analysis_service._download_pdf("https://x.test/p.pdf", "doc-1")
 
     assert captured["headers"]["X-Internal-Api-Key"] == "k-1"
+    assert downloaded.read_bytes() == b"%PDF-1.4"
+    assert analysis_service._cleanup_pdf_workspace(downloaded)
 
 
 # 일시적인 네트워크 문제로 약관 하나를 통째로 날리는 것은 아깝다.
@@ -92,12 +94,13 @@ def test_download_retries_transient_failure(monkeypatch, tmp_path):
 
     monkeypatch.setattr(analysis_service.httpx, "stream", fake_stream)
     monkeypatch.setattr(analysis_service.time, "sleep", lambda s: None)
-    monkeypatch.setattr(analysis_service, "RAW_PDF_DIR", tmp_path)
+    monkeypatch.setattr(analysis_service, "PDF_TEMP_ROOT", tmp_path)
     monkeypatch.setattr(analysis_service, "get_settings", lambda: Settings())
 
-    analysis_service._download_pdf("https://x.test/p.pdf", "doc-1")
+    downloaded = analysis_service._download_pdf("https://x.test/p.pdf", "doc-1")
 
     assert len(attempts) == 2
+    assert analysis_service._cleanup_pdf_workspace(downloaded)
 
 
 # 주소가 틀렸거나 만료됐으면 다시 받아도 같다. 재시도하면 실패를 늦게 알게 된다.
@@ -113,7 +116,7 @@ def test_download_does_not_retry_4xx(monkeypatch, tmp_path):
 
     monkeypatch.setattr(analysis_service.httpx, "stream", fake_stream)
     monkeypatch.setattr(analysis_service.time, "sleep", lambda s: None)
-    monkeypatch.setattr(analysis_service, "RAW_PDF_DIR", tmp_path)
+    monkeypatch.setattr(analysis_service, "PDF_TEMP_ROOT", tmp_path)
     monkeypatch.setattr(analysis_service, "get_settings", lambda: Settings())
 
     with pytest.raises(RuntimeError) as exc_info:
@@ -123,3 +126,4 @@ def test_download_does_not_retry_4xx(monkeypatch, tmp_path):
     assert "documentId=doc-1" in str(exc_info.value)
     assert "HTTPStatusError" in str(exc_info.value)
     assert "https://x.test/p.pdf" not in str(exc_info.value)
+    assert list(tmp_path.iterdir()) == []

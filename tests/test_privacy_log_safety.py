@@ -74,7 +74,7 @@ def test_certificate_parse_error_does_not_include_ai_response():
 
 def test_pdf_download_error_does_not_include_presigned_url(caplog, monkeypatch, tmp_path):
     url_secret = "https://storage.test/file.pdf?signature=URL-PRIVATE-3219"
-    monkeypatch.setattr(analysis_service, "RAW_PDF_DIR", tmp_path / "raw_pdfs")
+    monkeypatch.setattr(analysis_service, "PDF_TEMP_ROOT", tmp_path / "pdf_temp")
     monkeypatch.setattr(analysis_service, "get_settings", lambda: Settings())
     monkeypatch.setattr(analysis_service.time, "sleep", lambda _: None)
 
@@ -89,6 +89,7 @@ def test_pdf_download_error_does_not_include_presigned_url(caplog, monkeypatch, 
 
     assert url_secret not in caplog.text
     assert url_secret not in str(exc_info.value)
+    assert list((tmp_path / "pdf_temp").iterdir()) == []
 
 
 def test_request_shape_log_does_not_include_unexpected_values(caplog):
