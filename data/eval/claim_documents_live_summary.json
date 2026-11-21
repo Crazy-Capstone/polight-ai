@@ -1,0 +1,25 @@
+{
+  "verifiedAt": "2026-11-21",
+  "model": "gpt-4.1",
+  "totalLiveCalls": 4,
+  "initialCases": [
+    "samsung_medical",
+    "hanwha_theft",
+    "db_outpatient"
+  ],
+  "retestedCases": [
+    "db_outpatient"
+  ],
+  "changesAfterInitialRun": [
+    "Common conditional phrases are never displayed as unconditional required documents.",
+    "Online-claim omission notices are included in the list-wide notice.",
+    "Duplicate additional-confirmation wording is removed.",
+    "Evaluation distinguishes diagnosis-proof prescription examples from pharmacy-only prescriptions."
+  ],
+  "automatedTestsPassed": 67,
+  "limitations": [
+    "Final renderer changes were covered by automated tests; only DB was called again to limit cost.",
+    "Synthetic source-selection/checklist checks are not a deployed backend/frontend end-to-end test."
+  ],
+  "selectorSha256": "056c9463d3dbe2567a07d5ac550d725f6671bdd77ebcef18699e2d9019bd6eb6"
+}

@@ -1,0 +1,71 @@
+{
+  "checkedAt": "2026-11-21",
+  "status": "AI_API_VERIFIED_EXTERNAL_INTEGRATION_PENDING",
+  "automatedTests": {
+    "passed": 108,
+    "extraLiveModelCalls": 0,
+    "scope": [
+      "actual FastAPI request/response serialization",
+      "response JSON roundtrip in AI schema, not Spring persistence",
+      "OpenAPI nullable legacy source fields",
+      "missing linkage/unsupported type/clarification",
+      "401 authentication, 422 validation",
+      "ordinary RAG answers and suggested contacts regression"
+    ]
+  },
+  "backend": {
+    "repository": "https://github.com/Crazy-Capstone/Polight-Server",
+    "commit": "cdf63740569d180c3a806c191aa6afd53695c889",
+    "openPullRequestsAtCheck": 0,
+    "claimDocuments": "Present in input DTO, immediate response, metadata serialization and history response.",
+    "nullableSources": "ClaimDocument uses nullable Java reference types, no non-null constraints visible in inspected DTO.",
+    "missingFields": [
+      "claimDocumentsNotice",
+      "claimDocumentsUrl"
+    ],
+    "requiredChangeLocations": [
+      {
+        "path": "dto/RagQueryResponse.java",
+        "url": "https://github.com/Crazy-Capstone/Polight-Server/blob/cdf63740569d180c3a806c191aa6afd53695c889/src/main/java/polight/server/domain/chat/dto/RagQueryResponse.java"
+      },
+      {
+        "path": "dto/ChatAnswerResponse.java",
+        "url": "https://github.com/Crazy-Capstone/Polight-Server/blob/cdf63740569d180c3a806c191aa6afd53695c889/src/main/java/polight/server/domain/chat/dto/ChatAnswerResponse.java"
+      },
+      {
+        "path": "dto/ChatHistoryResponse.java",
+        "url": "https://github.com/Crazy-Capstone/Polight-Server/blob/cdf63740569d180c3a806c191aa6afd53695c889/src/main/java/polight/server/domain/chat/dto/ChatHistoryResponse.java"
+      },
+      {
+        "path": "dto/ChatMessageMetadata.java",
+        "url": "https://github.com/Crazy-Capstone/Polight-Server/blob/cdf63740569d180c3a806c191aa6afd53695c889/src/main/java/polight/server/domain/chat/dto/ChatMessageMetadata.java"
+      },
+      {
+        "path": "mapper/ChatMessageMapper.java",
+        "url": "https://github.com/Crazy-Capstone/Polight-Server/blob/cdf63740569d180c3a806c191aa6afd53695c889/src/main/java/polight/server/domain/chat/mapper/ChatMessageMapper.java"
+      },
+      {
+        "path": "service/ChatQueryService.java",
+        "url": "https://github.com/Crazy-Capstone/Polight-Server/blob/cdf63740569d180c3a806c191aa6afd53695c889/src/main/java/polight/server/domain/chat/service/ChatQueryService.java"
+      }
+    ],
+    "runtimePersistenceTested": false
+  },
+  "frontend": {
+    "repository": "https://github.com/Crazy-Capstone/Polight-frontend",
+    "commit": "680a539722ea05c406029533ee754d1a06feec7f",
+    "openPullRequestsAtCheck": 0,
+    "sourceUrl": "https://github.com/Crazy-Capstone/Polight-frontend/blob/680a539722ea05c406029533ee754d1a06feec7f/lib/screens/chatbot_screen.dart",
+    "finding": "Default branch chatbot screen contains hardcoded example messages. No claimDocuments/notice/url parsing or rendering found in inspected tree/screen.",
+    "runtimeUiTested": false,
+    "limitation": "Implementation on an unmerged branch or a different repository was not established by this check."
+  },
+  "requiredEndToEndChecks": [
+    "After backend changes, verify immediate answer includes checklist, notice and URL.",
+    "Reload chat history and verify the same fields persist.",
+    "Frontend displays common/conditional document list, notice and one official link button.",
+    "Verify clarification and unsupported responses with empty lists do not render an empty checklist/button."
+  ],
+  "deploymentPerformed": false,
+  "externalRepositoriesModified": false
+}

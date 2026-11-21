@@ -103,6 +103,10 @@ class ChunkHit:
 #   이후  : PgVectorRepository    (policy_chunks INSERT + embedding <=> 검색)
 #   향후  : OpenSearchRepository
 class VectorRepository(Protocol):
+    def get_terms_insurer(self, terms_id: str) -> str | None:
+        """연결된 약관의 보험사명. 확인되지 않으면 추측하지 않고 None."""
+        ...
+
     def save(
         self,
         chunks: list[dict],

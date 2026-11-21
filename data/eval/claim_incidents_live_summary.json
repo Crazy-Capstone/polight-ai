@@ -1,0 +1,18 @@
+{
+  "verifiedAt": "2026-11-21",
+  "environment": "EC2 polight-ai existing model configuration; modules loaded only in a temporary Python process; no deployment",
+  "provider": "openai-41",
+  "model": "gpt-4.1",
+  "totalLiveCalls": 7,
+  "initialPassed": 5,
+  "initialCases": 6,
+  "retestedCases": 1,
+  "retestedPassed": 1,
+  "fix": "Added explicit airline-baggage field interpretation for checked baggage in a flight context.",
+  "limitations": [
+    "Six synthetic scenarios, not an exhaustive accuracy benchmark.",
+    "After prompt change only the previously failed case was recalled, to limit API use.",
+    "Live classification was tested; actual checklist response integration belongs to subsequent steps."
+  ],
+  "classifierSha256": "504b8fca1c2453cd5e336c44089eab003e061cd38e709ec6f4c2b82f7796f38e"
+}

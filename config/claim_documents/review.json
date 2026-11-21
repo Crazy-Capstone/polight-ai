@@ -1,0 +1,204 @@
+{
+  "reviewedAt": "2026-11-21",
+  "scope": "사용자 원본 6개 조사 항목을 운영 DB 저장명 기준 7개 보험사로 정리. 공식 링크 본문 및 운영 DB 보험사명 확인 결과.",
+  "sources": [
+    {
+      "id": "samsung_property",
+      "status": "BODY_REVIEWED",
+      "detail": "브라우저에서 공식 여행 탭 공통/휴대품/여권/수하물지연/항공기지연 실손형·지수형/여행중단을 펼쳐 대조 완료."
+    },
+    {
+      "id": "samsung_medical",
+      "status": "USER_CONFIRMED",
+      "detail": "공통 4개 및 필요시 추가 6개 서류 구분을 사용자 확인으로 반영. 브라우저 확인 제한과 구분하여 기록."
+    },
+    {
+      "id": "kb",
+      "status": "BODY_REVIEWED",
+      "url": "https://www.kbinsure.co.kr/CG205020007.ec",
+      "detail": "공식 해외여행 표의 공통/의료/휴대품/배상/특별비용/여권/지연 구분 확인. 통원 금액별 표를 분리."
+    },
+    {
+      "id": "meritz",
+      "status": "BODY_REVIEWED",
+      "url": "https://www.meritzfire.com/compensation/longterm-insurance/request-document.do#!/",
+      "detail": "공식 페이지의 보험금 청구서류 안내장 링크를 확보. supply_file_info_outtravel.pdf 6페이지 여행보험 표 대조 및 7페이지 도난사고 조건 확인. 호적등본 표기도 공식 원문에 있음."
+    },
+    {
+      "id": "hyundai",
+      "status": "BODY_REVIEWED_USER_CONFIRMED",
+      "url": "https://www.hi.co.kr/serviceAction.do?menuId=100636",
+      "detail": "공식 여행 필요서류 본문 대조. 발급처의 의문스러운 표기도 원본에 존재."
+    },
+    {
+      "id": "db_travel",
+      "status": "BODY_REVIEWED_WITH_ISSUES",
+      "url": "https://www.idbins.com/pc/bizxpress/ct/dc/FWCUSV1302.shtm",
+      "detail": "여행자보험 및 휴대품손해 표 확인. 미성년자 가족서류 문장은 공식 페이지에도 잘려 있음."
+    },
+    {
+      "id": "hanwha",
+      "status": "FETCH_TIMEOUT",
+      "url": "https://www.hwgeneralins.com/fplaza/compensation/receipt05.do",
+      "detail": "웹 조회에 이어 브라우저 접속도 시간 초과. 현재 공식 본문 검증 불가."
+    },
+    {
+      "id": "carrot",
+      "status": "SITE_INSPECTION_BLOCKED",
+      "detail": "브라우저에서 공식 페이지 접속 시 개발자 도구 실행 차단 안내가 표시되어 본문 검증 불가. 사용자 이미지와 Notion 전사 기준 유지."
+    }
+  ],
+  "issues": [
+    {
+      "id": "profile_separation",
+      "action": "SEPARATED",
+      "detail": "운영 DB policy_terms.insurer_name에서 한화손해보험과 캐롯손해보험을 별도 확인. 각 독립 보험사 항목으로 분리하고 서류 및 링크는 유지. 인수사 별칭만으로 두 목록을 합산하지 않는다."
+    },
+    {
+      "id": "db_general_products",
+      "action": "EXCLUDED_FROM_TRAVEL_SELECTION",
+      "detail": "DB 질병/상해·운전자·치아·태아 등 별도 상품 자료는 db_non_travel_reference.json에 보존. 여행보험 안내에 자동 합산하지 않음."
+    },
+    {
+      "id": "kb_nested_table",
+      "action": "SPLIT",
+      "detail": "국내 통원 3만원 이하/3만원 초과~10만원 이하/10만원 초과를 별도 그룹으로 분리. 해외 의료비 목록과 혼합 금지."
+    },
+    {
+      "id": "samsung_benefit_type",
+      "action": "SPLIT",
+      "detail": "항공 지연 실손 보상형과 지수형을 별도 그룹으로 분리. 의료비/재물 공통서류도 별도 프로필로 분리."
+    },
+    {
+      "id": "conditional_alternatives",
+      "action": "PRESERVED",
+      "detail": "수리 가능/불가, 미성년자/대리청구, 신고서류 부재 시 대체, 온라인 제출 생략 조건을 원문 블록 또는 conditionText로 보존. 블록의 모든 서류를 무조건 필수로 나열하면 안 됨."
+    },
+    {
+      "id": "hyundai_passport_issuer",
+      "action": "USER_CONFIRMED_KEEP_SOURCE",
+      "detail": "사용자가 현재 공식 홈페이지 표기 확인. 원문 유지하며 자료 검증의 추가 확인 대상에서 제외.",
+      "referenceUrl": "https://passport.go.kr/home/kor/contents.do?menuPos=21"
+    },
+    {
+      "id": "hyundai_settlement_issuer",
+      "action": "USER_CONFIRMED_KEEP_SOURCE",
+      "detail": "사용자가 현재 공식 홈페이지 표기 확인. 원문 유지하며 자료 검증의 추가 확인 대상에서 제외."
+    },
+    {
+      "id": "db_minor_truncation",
+      "action": "USER_CONFIRMED_KEEP_SOURCE",
+      "detail": "사용자가 가족으로 끝나는 것이 원문임을 확인. 잘림으로 간주하지 않고 원문 유지."
+    },
+    {
+      "id": "meritz_old_family_document",
+      "action": "USER_CONFIRMED_KEEP_SOURCE",
+      "detail": "사용자가 현재 공식 홈페이지 표기 확인. 원문 유지하며 자료 검증의 추가 확인 대상에서 제외."
+    },
+    {
+      "id": "carrot_delay_combined",
+      "action": "USER_CONFIRMED_KEEP_COMBINED",
+      "detail": "개별 사고 적용이 별도로 명시되지 않았음을 사용자 확인. 원문 통합 목록 그대로 일반 안내하며 임의로 분기하지 않음."
+    },
+    {
+      "id": "non_document_actions",
+      "action": "PRESERVED_AS_CONTEXT",
+      "detail": "잔존물 회수, 파손품 송부, 숙박비용 자체는 서류명이 아님. 원문 블록으로 보존하되 응답 서류 목록에는 조치/비용 설명을 별도 처리할 것."
+    },
+    {
+      "id": "coverage_numbers",
+      "action": "NOT_FOR_COVERAGE_DECISIONS",
+      "detail": "20만원·1만원·4시간·6시간·24시간·120시간·25% 감가 등 안내문 수치는 개인 계약 보상 판단에 사용하지 않는다. 서류 금액 기준도 해당 보험사/국내외/상품 범위에서만 사용."
+    },
+    {
+      "id": "form_downloads",
+      "action": "EXCLUDED",
+      "detail": "활성 카탈로그에서 양식 다운로드 열과 파일 링크 제외. 청구서/동의서 등 제출할 서류의 이름은 유지. 사용자 원본 보관 파일에는 원문 그대로 남음."
+    }
+  ],
+  "secondReview": {
+    "date": "2026-11-21",
+    "fixes": [
+      {
+        "id": "carrot_heading_leak",
+        "detail": "마지막 변호사 비용 증빙 문장에 다음 프로필 제목 한화손보가 붙은 변환 오류 제거."
+      },
+      {
+        "id": "kb_shared_outpatient_notes",
+        "detail": "모든 금액 구간에 해당하는 통원 공통 유의사항을 10만원 초과 그룹에서 공통 유의사항 그룹으로 분리."
+      },
+      {
+        "id": "kb_issuer_column",
+        "detail": "사용자 표의 마지막 빈 헤더 열에 들어 있던 의료기관 발급처를 통원 그룹에 복구."
+      },
+      {
+        "id": "hyundai_missing_domestic_identity",
+        "detail": "공식 여행 공통서류에 있는 국내여행 신분증 사본(앞면)을 추가하고 온라인 청구 제출 생략 조건 명시."
+      }
+    ],
+    "officialEvidence": [
+      "https://www.samsungfire.com/v2/html/claim/08/C_080_100_001.html?tab=1",
+      "https://www.samsungfire.com/v2/html/customer/13/G_030_010_010.html",
+      "https://www.kbinsure.co.kr/CG205020007.ec",
+      "https://www.hi.co.kr/serviceAction.do?menuId=100636",
+      "https://www.idbins.com/pc/bizxpress/ct/dc/FWCUSV1302.shtm",
+      "https://cmdown.meritzfire.com/manager/cm/document/supply_file_info_outtravel.pdf"
+    ],
+    "remainingLimitations": [
+      "한화 원문 접속 시간 초과",
+      "캐롯 사이트 검사 차단",
+      "카탈로그는 원문 조건을 담은 자료 블록이며 응답용 서류명 배열과 동일하지 않음"
+    ]
+  },
+  "userClarifications": [
+    {
+      "date": "2026-11-21",
+      "profileId": "medical_travel",
+      "detail": "사용자 확인: 공통 4개 서류와 필요시 추가 6개 서류를 별도 그룹으로 분리. 추가서류는 보험사 확인 안내 및 약값/상해 조건을 유지."
+    },
+    {
+      "date": "2026-11-21",
+      "detail": "현대해상 발급처 2건 및 메리츠 호적등본 표기는 사용자 확인 완료. 삼성 여행 질병/상해도 사용자 확인 완료로 정리. 남은 수동 확인은 한화·캐롯·DB 미성년자 항목."
+    },
+    {
+      "date": "2026-11-21",
+      "detail": "캐롯 지연비용은 원문 통합 목록으로 안내. DB 미성년자 가족 표기 원문 유지. DB 여행보험표만 활성 카탈로그에 저장하고 질병/상해·운행 표는 참조 보관함에 유지."
+    }
+  ],
+  "dbInsurerVerification": {
+    "date": "2026-11-21",
+    "source": "EC2 polight-ai 컨테이너의 운영 DB 연결, 읽기 전용 SELECT",
+    "table": "policy_terms",
+    "rows": [
+      [
+        "캐롯손해보험",
+        "캐롯 해외여행보험",
+        2
+      ],
+      [
+        "한화손해보험",
+        "해외여행보험",
+        1
+      ],
+      [
+        "한화손해보험",
+        "해외여행보험Ⅱ",
+        1
+      ],
+      [
+        "한화손해보험",
+        "해외여행보험Ⅲ",
+        1
+      ],
+      [
+        "한화손해보험",
+        "해외여행보험Ⅳ",
+        1
+      ]
+    ],
+    "scope": "공용 약관 보험사명/상품명/행 수. 개인정보 및 DB 접속정보는 조회 결과에 포함하지 않음."
+  },
+  "pendingManualChecks": [
+    "한화손해보험 안내 목록 및 조건 대조"
+  ]
+}

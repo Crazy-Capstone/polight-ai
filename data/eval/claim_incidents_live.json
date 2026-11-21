@@ -1,0 +1,157 @@
+{
+  "provider": "openai-41",
+  "model": "gpt-4.1",
+  "calls": 6,
+  "passed": 5,
+  "results": [
+    {
+      "case": "phone_theft",
+      "passed": true,
+      "errors": [],
+      "seconds": 3.29,
+      "actual": {
+        "is_claim_document_question": true,
+        "incidents": [
+          "theft"
+        ],
+        "is_phone": true,
+        "repair_status": null,
+        "care_type": null,
+        "treatment_location": null,
+        "is_proxy_claim": null,
+        "is_minor": null,
+        "has_pharmacy_expense": null,
+        "is_airline_baggage": null,
+        "liability_type": null,
+        "benefit_type": null,
+        "claim_amount_krw": null,
+        "unavailable_conditions": []
+      }
+    },
+    {
+      "case": "damage_followup",
+      "passed": true,
+      "errors": [],
+      "seconds": 1.88,
+      "actual": {
+        "is_claim_document_question": true,
+        "incidents": [
+          "damage"
+        ],
+        "is_phone": true,
+        "repair_status": "unrepairable",
+        "care_type": null,
+        "treatment_location": null,
+        "is_proxy_claim": null,
+        "is_minor": null,
+        "has_pharmacy_expense": null,
+        "is_airline_baggage": null,
+        "liability_type": null,
+        "benefit_type": null,
+        "claim_amount_krw": null,
+        "unavailable_conditions": []
+      }
+    },
+    {
+      "case": "overseas_outpatient",
+      "passed": true,
+      "errors": [],
+      "seconds": 1.19,
+      "actual": {
+        "is_claim_document_question": true,
+        "incidents": [
+          "medical"
+        ],
+        "is_phone": null,
+        "repair_status": null,
+        "care_type": "outpatient",
+        "treatment_location": "overseas",
+        "is_proxy_claim": null,
+        "is_minor": null,
+        "has_pharmacy_expense": true,
+        "is_airline_baggage": null,
+        "liability_type": null,
+        "benefit_type": null,
+        "claim_amount_krw": null,
+        "unavailable_conditions": []
+      }
+    },
+    {
+      "case": "minor_proxy",
+      "passed": true,
+      "errors": [],
+      "seconds": 1.46,
+      "actual": {
+        "is_claim_document_question": true,
+        "incidents": [
+          "medical"
+        ],
+        "is_phone": null,
+        "repair_status": null,
+        "care_type": "inpatient",
+        "treatment_location": "overseas",
+        "is_proxy_claim": true,
+        "is_minor": true,
+        "has_pharmacy_expense": null,
+        "is_airline_baggage": null,
+        "liability_type": null,
+        "benefit_type": null,
+        "claim_amount_krw": null,
+        "unavailable_conditions": []
+      }
+    },
+    {
+      "case": "multiple_delays",
+      "passed": false,
+      "errors": [
+        "is_airline_baggage"
+      ],
+      "seconds": 2.11,
+      "actual": {
+        "is_claim_document_question": true,
+        "incidents": [
+          "flight_delay",
+          "baggage_delay"
+        ],
+        "is_phone": null,
+        "repair_status": null,
+        "care_type": null,
+        "treatment_location": null,
+        "is_proxy_claim": null,
+        "is_minor": null,
+        "has_pharmacy_expense": null,
+        "is_airline_baggage": null,
+        "liability_type": null,
+        "benefit_type": null,
+        "claim_amount_krw": null,
+        "unavailable_conditions": []
+      }
+    },
+    {
+      "case": "correction_unknown",
+      "passed": true,
+      "errors": [],
+      "seconds": 1.76,
+      "actual": {
+        "is_claim_document_question": true,
+        "incidents": [
+          "medical"
+        ],
+        "is_phone": null,
+        "repair_status": null,
+        "care_type": "outpatient",
+        "treatment_location": "domestic",
+        "is_proxy_claim": null,
+        "is_minor": null,
+        "has_pharmacy_expense": null,
+        "is_airline_baggage": null,
+        "liability_type": null,
+        "benefit_type": null,
+        "claim_amount_krw": null,
+        "unavailable_conditions": [
+          "claim_amount_krw"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "answer": "DB손해보험의 안내 자료를 기준으로 청구서류를 정리했습니다. 조건이 표시된 추가서류는 해당하는 경우 확인해 주세요.",
+  "responseType": "TEXT",
+  "suggestedContacts": [],
+  "sources": [],
+  "claimDocuments": [
+    {
+      "documentName": "보험금청구서",
+      "requirementType": "REQUIRED",
+      "conditionText": null,
+      "coverageTitle": "공통",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    },
+    {
+      "documentName": "개인정보동의서",
+      "requirementType": "CONDITIONAL",
+      "conditionText": "피보험자 및 목격자 등 관련자 필수",
+      "coverageTitle": "공통",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    },
+    {
+      "documentName": "통장 사본",
+      "requirementType": "REQUIRED",
+      "conditionText": null,
+      "coverageTitle": "공통",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    },
+    {
+      "documentName": "여권 사본(사진 부분과 입출국 도장 찍힌 부분)",
+      "requirementType": "REQUIRED",
+      "conditionText": null,
+      "coverageTitle": "공통",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    },
+    {
+      "documentName": "국내 여행자보험인 경우 신분증 사본",
+      "requirementType": "CONDITIONAL",
+      "conditionText": "국내 여행자보험인 경우 신분증 사본",
+      "coverageTitle": "공통",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    },
+    {
+      "documentName": "진료비계산서(영수증)",
+      "requirementType": "UNKNOWN",
+      "conditionText": null,
+      "coverageTitle": "통원 / 외래의료비",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    },
+    {
+      "documentName": "진단명/통원일자·기간이 포함된 서류\n(예: 진단서, 통원확인서, 처방전, 진료확인서, 소견서, 진료차트 등)",
+      "requirementType": "CONDITIONAL",
+      "conditionText": "단, 3만원 이하 시(산부인과, 항문외과, 비뇨기과, 피부과 등 제외) 제출 생략 가능",
+      "coverageTitle": "추가서류",
+      "sourceChunkId": null,
+      "sourceQuote": null,
+      "sectionTitle": "",
+      "pageStart": null,
+      "pageEnd": null
+    }
+  ],
+  "claimDocumentsNotice": "일반적인 청구서류 안내입니다. 가입 상품과 사고 내용에 따라 추가·대체 서류가 필요할 수 있으므로, 아래 보험사 공식 필요서류 안내 및 담당자에게 최종 확인해 주세요.",
+  "claimDocumentsUrl": "https://www.idbins.com/pc/bizxpress/ct/dc/FWCUSV1302.shtm"
+}

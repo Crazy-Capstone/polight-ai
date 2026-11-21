@@ -142,6 +142,17 @@ def _scope_condition(scope: SearchScope | None, prefix: str) -> tuple[str, dict]
 # FileVectorRepository와 같은 인터페이스를 구현하므로, 이 클래스를 쓰도록 바꿔도
 # rag_service와 라우터는 수정할 필요가 없다.
 class PgVectorRepository:
+    def get_terms_insurer(self, terms_id: str) -> str | None:
+        if not terms_id:
+            return None
+        with self._cursor() as cursor:
+            cursor.execute(
+                "SELECT insurer_name FROM policy_terms WHERE id = %s::uuid",
+                (terms_id,),
+            )
+            row = cursor.fetchone()
+        return row[0] if row else None
+
     def __init__(
         self,
         dsn: str,

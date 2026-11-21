@@ -61,14 +61,14 @@ class SourceChunk(CamelModel):
 
 
 class ClaimDocument(CamelModel):
-    """약관 근거가 서류별로 저장된 경우의 체크리스트 한 항목."""
+    """청구서류 항목. 홈페이지 일반 안내에는 약관 인용이 없다."""
 
     document_name: str
     requirement_type: Literal["REQUIRED", "CONDITIONAL", "UNKNOWN"]
     condition_text: str | None = None
     coverage_title: str
-    source_chunk_id: str
-    source_quote: str
+    source_chunk_id: str | None = None
+    source_quote: str | None = None
     section_title: str = ""
     page_start: int | None = None
     page_end: int | None = None
@@ -190,6 +190,7 @@ class RagQueryResponse(CamelModel):
     suggested_contacts: list[Literal["HOSPITAL", "POLICE", "EMBASSY"]] = []
 
     sources: list[SourceChunk]
-    # 체크리스트는 원문 출처와 연결된 항목만 담는다. LLM이 일반 상식으로 만든
-    # 준비 권장 서류는 이 필드에 들어오지 않는다.
+    # 사전 조사자료에서 선택한 일반 안내 목록. 홈페이지 출처는 목록 전체에 적용한다.
     claim_documents: list[ClaimDocument] = []
+    claim_documents_notice: str | None = None
+    claim_documents_url: str | None = None

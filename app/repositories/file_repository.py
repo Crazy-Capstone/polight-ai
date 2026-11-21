@@ -59,6 +59,12 @@ EMBEDDINGS_DIR = PROJECT_ROOT / "data" / "embeddings"
 # 이쪽은 전수 계산이라 정확한 최근접 이웃을 반환한다.
 # 청크 수천 개 규모에서는 행렬 곱 한 번이 1ms 미만이라 성능도 문제되지 않는다.
 class FileVectorRepository:
+    def get_terms_insurer(self, terms_id: str) -> str | None:
+        # 로컬 평가에서는 DB UUID 대신 registry의 약관 id를 사용한다.
+        path = Path(__file__).resolve().parents[2] / 'config' / 'terms_registry.json'
+        terms = json.loads(path.read_text(encoding='utf-8'))['terms']
+        return next((t['insurer'] for t in terms if t['id'] == terms_id), None)
+
     def __init__(
         self,
         chunks_dir: Path | None = None,

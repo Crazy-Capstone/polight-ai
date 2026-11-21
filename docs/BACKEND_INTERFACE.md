@@ -133,14 +133,18 @@ POST /internal/rag/query
 }
 ```
 
-`claimDocuments`는 청구 서류 질문에만 채워집니다. 약관 청크와 서류 항목을 잇는
-저장된 원문 인용이 있을 때만 반환하며, LLM이 일반 지식으로 제안한 준비물은 포함하지
-않습니다. `requirementType`은 `REQUIRED`(명시적 제출 의무), `CONDITIONAL`(특정 상황에서
-제출), `UNKNOWN`(저장 데이터만으로 분류 불가)입니다. 서류 질문의 `answer`는 이 배열의
-항목을 모델이 다시 만들어 나열하지 않고, 고정 안내문과 실제 출처 번호만 반환합니다.
-근거가 연결된 항목이 없으면 `claimDocuments`는 빈 배열이며, 답변도 목록을 확정할 수 없다고
-안내합니다. Spring DTO와 `chat_messages` 저장/재조회 경로에서 이 필드를 보존해야 프론트가
-체크리스트로 그릴 수 있습니다.
+`claimDocuments`는 청구서류 질문에 보험사별 홈페이지 조사자료에서 선택한 목록을 반환합니다.
+보험사 확인은 요청의 `termsId`로 `policy_terms.insurer_name`을 조회해 수행합니다.
+청구서류 응답은 약관 청크 검색·원문 연결 없이 동작하며 `sources`는 빈 배열입니다.
+
+- `claimDocumentsNotice`: 목록 전체의 일반 안내 및 제출 생략 조건 등 유의사항 문자열.
+- `claimDocumentsUrl`: 선택한 보험사/안내 프로필의 공식 필요서류 페이지 URL 하나.
+- 서류별 `sourceChunkId`, `sourceQuote`는 선택값이며 홈페이지 안내에서는 null입니다.
+- 기존 `documentName`, `requirementType`, `conditionText`, `coverageTitle`은 유지합니다.
+- `coverageTitle`로 공통서류/유형별/추가서류를 구분하고 조건부 항목은 `CONDITIONAL`로 표시합니다.
+- `UNKNOWN`은 자료에서 제출 의무를 확정하지 않았다는 뜻입니다. 서류가 불필요하다는 뜻이 아닙니다.
+- 확인 질문·미지원 유형·오류에는 목록이 비어 있을 수 있습니다. 다른 보험사의 목록으로 대체하지 않습니다.
+- Spring DTO와 저장/재조회 경로에서 목록 및 두 신규 필드를 보존하고 프론트가 목록 아래 문구와 링크 버튼 하나를 표시해야 합니다.
 
 #### 근거 본문 — 프론트가 [근거 N]을 눌러 조항을 볼 수 있게 하는 데 필요한 것
 

@@ -1,0 +1,1813 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-11-21",
+  "researchPageUrl": "https://checkered-trick-560.notion.site/41c965fbd35d80d8b1a9f65dab61690a",
+  "sourceSha256": "67f38e96b5315e8cff69c616785d8ca619f6ad3ac8fe783b86c35e5ebed10890",
+  "purpose": "여행보험 일반 청구서류 안내용 사전 자료. 보상 여부·금액·지급조건 판단용 아님.",
+  "notice": "일반적인 청구서류 안내입니다. 가입 상품과 사고 내용에 따라 추가·대체 서류가 필요할 수 있으니 보험사 공식 필요서류 안내 및 담당자에게 최종 확인해 주세요.",
+  "runtimeIntegrated": false,
+  "selectionRules": [
+    "보험사는 현재 증권/연결 약관에서 확인한다. 질문만으로 보험사를 추측하지 않는다.",
+    "동일 보험사라도 프로필 및 국내/해외·사고 유형이 다른 목록은 합산하지 않는다.",
+    "공통 그룹과 해당 유형만 선택하되 조건부/대체서류는 조건을 확인한다.",
+    "requirements.text는 조건·예시를 포함하는 자료 블록이다. 각 블록을 필수 서류 한 건으로 취급하지 않는다.",
+    "서류 양식 파일 및 다운로드 링크는 응답에 포함하지 않는다. 목록 전체의 guideUrl만 사용한다.",
+    "미검증/의문 항목은 검증 기록을 확인하고 확정 안내를 보류한다."
+  ],
+  "insurers": [
+    {
+      "id": "samsung",
+      "name": "삼성화재",
+      "aliases": [
+        "삼성화재",
+        "삼성화재해상보험"
+      ],
+      "profiles": [
+        {
+          "id": "property_travel",
+          "title": "재물/배상 여행",
+          "guideUrl": "https://www.samsungfire.com/v2/html/claim/08/C_080_100_001.html?tab=1",
+          "verificationStatus": "BODY_REVIEWED",
+          "groups": [
+            {
+              "id": "property_travel_01",
+              "title": "공통",
+              "requirements": [
+                {
+                  "text": "보험금청구서",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "개인(신용)정보처리동의서",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "여권 사본(여권번호 표기 면 + 입출국 도장 찍힌 면) -해당 국가 출입국 도장이 없는 경우 출입국사실증명서로 대체할 수 있습니다. -국내 여행보험 관련 청구 시 여권 사본은 제출할 필요가 없습니다.",
+                  "issuerText": "관공서/정부24",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "※ 삼성화재 홈페이지에서 청구할 경우 '보험금청구서' 및 '개인(신용)정보처리동의서'는 홈페이지를 통해 처리되니 따로 제출하실 필요가 없습니다.",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "NOTICE"
+                },
+                {
+                  "text": "가족관계 확인서류(가족관계증명서, 혼인관계증명서 등)",
+                  "issuerText": "주민센터",
+                  "conditionText": "가족관계 확인이 필요한 경우",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "위임장 원본(인감 날인)",
+                  "issuerText": "보험사",
+                  "conditionText": "대리인이 보험금을 청구하는 경우",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "보험금 청구권자의 인감증명서 원본(또는 본인서명사실확인서) -「인감증명법 시행령」 제 13조에 따라 인터넷에서 발급받은 인감증명서는 인정되지 않습니다. 주민센터에서 발급받은 인감증명서를 준비해 주세요.",
+                  "issuerText": "주민센터",
+                  "conditionText": "대리인이 보험금을 청구하는 경우",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "개인(신용)정보처리동의서(보험금 청구를 위한 필수 동의서)",
+                  "issuerText": "보험사",
+                  "conditionText": "대리인이 보험금을 청구하는 경우",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "※ 위임장에는 인감증명서(본인서명사실확인서)와 일치하는 인감도장(본인서명)을 꼭 날인(서명)해주시길 바랍니다.",
+                  "issuerText": null,
+                  "conditionText": "대리인이 보험금을 청구하는 경우",
+                  "kind": "NOTICE"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_02",
+              "title": "휴대품손해 / 도난",
+              "requirements": [
+                {
+                  "text": "도난사고증명서 -현지 경찰서의 확인서(Police Report) 또는 도난증명서 등",
+                  "issuerText": "현지 경찰서",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "목격자 확인서",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해품 내역서(삼성화재 홈페이지에서 청구 시 첨부 불필요)",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "구매영수증(구입일시 및 구입처, 구입가격 표기 자료)",
+                  "issuerText": "구매처",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "착용(소지) 사진",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "휴대폰의 경우 이용계약증명서, 가입원부증명서, 가입사실 확인서 중 택1",
+                  "issuerText": "휴대폰 대리점",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_03",
+              "title": "휴대품손해 / 파손",
+              "requirements": [
+                {
+                  "text": "파손사진",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해품 내역서(삼성화재 홈페이지에서 청구 시 첨부 제외)",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수리비 견적서, 수리비 영수증",
+                  "issuerText": "수리업체",
+                  "conditionText": "수리 가능한 경우",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수리불가 확인서",
+                  "issuerText": "수리업체",
+                  "conditionText": "수리 불가능한 경우",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수리비 견적서/수리비 영수증 또는 수리불가 확인서",
+                  "issuerText": "휴대폰 대리점",
+                  "conditionText": "휴대폰 파손 시",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "가입증명원(해지 유무 확인용)",
+                  "issuerText": "휴대폰 대리점",
+                  "conditionText": "휴대폰 파손 시",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "휴대폰보험 가입 확인 서류(가입한 경우)",
+                  "issuerText": "휴대폰 대리점",
+                  "conditionText": "휴대폰 파손 시",
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공사 확인서",
+                  "issuerText": "항공사",
+                  "conditionText": "항공 수화물 손해의 경우",
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_04",
+              "title": "분실여권 재발급(해외여행)",
+              "requirements": [
+                {
+                  "text": "재발급비용 증빙서류(영수증 등)",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "여행증명서(T/C: Travel Certification)",
+                  "issuerText": "재외공관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "재발급한 여권 사본(여권번호 표기 면)",
+                  "issuerText": "시청/군청/구청",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_05",
+              "title": "수하물 지연(해외여행)",
+              "requirements": [
+                {
+                  "text": "지연시간 표기된 수하물지연확인서 또는 항공사에 지연신고한 서류(Property irregularity Report)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수하물 지연분실 문답서",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "결항/지연분실로 발생한 필수품 구매영수증(상호, 날짜, 시간 명시)",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_06",
+              "title": "항공기 지연결항(해외여행) / 실손 보상형",
+              "requirements": [
+                {
+                  "text": "항공기 지연/결항 확인서(확인서에 승객 명단이 없는 경우 항공권 사본 제출)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "지연/결항으로 발생한 비용 영수증(식비, 숙박비, 해당 숙박시설 이동교통비 등으로 상호, 날짜, 시간 명시)",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_07",
+              "title": "항공기 지연결항(해외여행) / 지수형",
+              "requirements": [
+                {
+                  "text": "항공기 지연/결항 확인서(확인서에 승객 명단이 없는 경우 항공권 사본 제출, 확인서에 지연시간이 없는 경우 변경 전/후 항공기 탑승권 사본 제출)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "property_travel_08",
+              "title": "여행중단(해외여행)",
+              "requirements": [
+                {
+                  "text": "항공권 결제내역(여행 시 출국/입국 결제내역)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "여행 중단으로 새롭게 결제한 추가항공권 영수증(숙박 시 2박 이내 영수증)",
+                  "issuerText": "항공사/청구인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "여행 중단 사유 증빙자료(3일 이상 입·퇴원 확인서, 사망진단서 등)",
+                  "issuerText": "병원",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "홈페이지 청구 시 청구서/동의서와 피해품 내역서의 제출 생략 조건을 각 항목에서 확인한다."
+          ],
+          "automaticSelectionAllowed": true,
+          "reviewedAt": "2026-11-21"
+        },
+        {
+          "id": "medical_travel",
+          "title": "여행중 질병/상해",
+          "guideUrl": "https://www.samsungfire.com/v2/html/customer/13/G_030_010_010.html",
+          "verificationStatus": "USER_CONFIRMED",
+          "groups": [
+            {
+              "id": "medical_travel_01",
+              "title": "공통서류",
+              "requirements": [
+                {
+                  "text": "보험금 청구서",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "개인(신용)정보처리동의서",
+                  "issuerText": "보험사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "청구인 신분증 사본",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "해외여행 시 여권 사본(사진 면 + 입출국 도장 찍힌 면)",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "※ 삼성화재 홈페이지에서 청구할 경우 ‘보험금 청구서’ 및 ‘개인(신용)정보처리동의서’는 홈페이지를 통해 처리되니 따로 제출하실 필요가 없습니다.",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "NOTICE"
+                }
+              ],
+              "documentCategory": "COMMON",
+              "displayOrder": 1,
+              "requiresInsurerConfirmation": false,
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "medical_travel_02",
+              "title": "추가로 필요할 수 있는 서류",
+              "requirements": [
+                {
+                  "text": "진단서 또는 의사소견서(진단명, 질병분류코드, 치료기간 포함)",
+                  "issuerText": "의료기관",
+                  "conditionText": "사고내용과 보상담보에 따라 추가로 필요할 수 있음. 실제 제출 필요 여부는 보험사 확인 필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "requirementType": "CONDITIONAL"
+                },
+                {
+                  "text": "진료비 계산서·영수증",
+                  "issuerText": "의료기관",
+                  "conditionText": "사고내용과 보상담보에 따라 추가로 필요할 수 있음. 실제 제출 필요 여부는 보험사 확인 필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "requirementType": "CONDITIONAL"
+                },
+                {
+                  "text": "진료비 세부내역서",
+                  "issuerText": "의료기관",
+                  "conditionText": "사고내용과 보상담보에 따라 추가로 필요할 수 있음. 실제 제출 필요 여부는 보험사 확인 필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "requirementType": "CONDITIONAL"
+                },
+                {
+                  "text": "약값 발생 시 약제비 계산서·영수증 및 처방전",
+                  "issuerText": "의료기관",
+                  "conditionText": "약값이 발생한 경우. 실제 제출 필요 여부는 보험사 확인 필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "requirementType": "CONDITIONAL"
+                },
+                {
+                  "text": "초진기록지",
+                  "issuerText": "의료기관",
+                  "conditionText": "사고내용과 보상담보에 따라 추가로 필요할 수 있음. 실제 제출 필요 여부는 보험사 확인 필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "requirementType": "CONDITIONAL"
+                },
+                {
+                  "text": "사고사실확인서 등 사고내용이 확인되는 서류",
+                  "issuerText": "의료기관",
+                  "conditionText": "상해사고의 경우. 실제 제출 필요 여부는 보험사 확인 필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "requirementType": "CONDITIONAL"
+                }
+              ],
+              "documentCategory": "ADDITIONAL",
+              "displayOrder": 2,
+              "requiresInsurerConfirmation": true,
+              "notice": "아래 서류는 사고내용과 보상담보에 따라 추가로 필요할 수 있습니다. 실제 제출이 필요한 서류는 삼성화재에 확인해 주세요.",
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "사용자 확인에 따라 보험금 청구서부터 여권 사본까지 공통서류, 진단서부터 사고내용 확인서류까지는 필요시 추가서류로 구분한다.",
+            "삼성 여행 질병/상해 목록 및 공통·추가 구분은 사용자 확인 완료. 브라우저 개별 목록 확인 제한은 검증 이력으로만 유지한다."
+          ],
+          "presentationRules": [
+            "공통서류를 먼저 안내하고 추가로 필요할 수 있는 서류를 별도 목록으로 안내한다.",
+            "추가서류를 모든 사용자에게 필수인 것처럼 안내하지 않는다. 추가 목록에 보험사 확인 안내를 함께 표시한다.",
+            "홈페이지 청구 시 공통서류 중 보험금 청구서 및 개인(신용)정보처리동의서의 별도 제출 생략 조건을 유지한다."
+          ],
+          "automaticSelectionAllowed": true,
+          "reviewedAt": "2026-11-21"
+        }
+      ]
+    },
+    {
+      "id": "kb",
+      "name": "KB손해보험",
+      "aliases": [
+        "KB손해보험",
+        "KB손보",
+        "케이비손해보험"
+      ],
+      "profiles": [
+        {
+          "id": "overseas_travel",
+          "title": "해외여행",
+          "guideUrl": "https://www.kbinsure.co.kr/CG205020007.ec",
+          "verificationStatus": "BODY_REVIEWED",
+          "groups": [
+            {
+              "id": "overseas_travel_01",
+              "title": "공통서류",
+              "requirements": [
+                {
+                  "text": "- 보험금청구서(당사양식, 계좌번호 기재)\n- 보험금 청구를 위한 상세동의서(당사양식)\n- 청구인의 신분증 사본 [미성년자 생략]\n(주민등록증 뒷면은 수집하지 않습니다.)\n- 해외여행 사고\nㆍ여권사본(증명사진 면 및 출입구도장 면) 또는 출입국에 관한 사실증명(출입국증명서)\nㆍ비자사본(비자발급 고객)",
+                  "issuerText": "당사양식",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "※ [필요시] 추가서류\n- 가족관계 확인 필요시\n(배우자, 자녀 등의 보장상품, 수익자가 미성년자인 경우 등)\n: 가족관계서류 (예: 가족관계증명서, 혼인관계증명서 등)",
+                  "issuerText": "주민센터",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "※ 타인에게 보험금을 위임하는 경우\n- 위임장(당사양식, 인감도장날인 또는 본인서명)\n- 인감증명서(또는 본인서명사실확인서) 제출\n- 보험금청구권자와 타인 각각의 보험금 청구를 위한 상세동의서(당사양식)",
+                  "issuerText": "주민센터\n당사양식",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "※ 진단서 발급시 유의사항\n반드시 한국표준질병 사인분류번호가 기재된 진단서를 제출해 주십시오.",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_02",
+              "title": "사망",
+              "requirements": [
+                {
+                  "text": "- 사망진단서(사체검안서) 원본\n- 사망진단서(사체검안서) 사본 및 망인 기준 기본증명서(사망사실 기재)\n<수익자 미지정시>\nㆍ상속관계 확인서류\n(예시) 망인기준 가족관계증명서, 혼인관계증명서 등\n<다수의 법정상속인 중 1인이 대표로 수령하는 경우>\nㆍ상속관계 확인서류\nㆍ위임장 작성(당사양식, 인감도장날인 또는 본인서명)\nㆍ인감증명서(또는 본인서명사실확인서)\nㆍ모든 법정상속인 각각의 보험금 청구를 위한 상세동의서(당사양식)",
+                  "issuerText": "의료기관\n주민센터\n\n주민센터\n\n주민센터\n당사양식",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_03",
+              "title": "상해/질병 / 해외입원/통원",
+              "requirements": [
+                {
+                  "text": "- 해외병원서류 일체(진단서, 진료확인서, 병원영수증(처방전 영수증 포함))\n- 정밀검사등 시행시 관련 검사기록지 또는 영상자료(CT, MRI, MRA 등)\n- 교통사고 등의 경우 현지 경찰보고서 등 사고내용을 입증할 수 있는 서류\n※ 필요시 가이드의 사고발생확인서 등을 요청할 수 있습니다.",
+                  "issuerText": "현지의료기관\n\n현지경찰서 등",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_04",
+              "title": "상해/질병 / 국내입원",
+              "requirements": [
+                {
+                  "text": "- 진단서(질병분류코드(진단명), 입퇴원기간 기재 필수)\nㆍ입퇴원확인서(질병분류코드(진단명)) 또는\n진료확인서(질병분류코드(진단명), 입퇴원기간 기재 필수)로 대체 가능\n- 진료비계산서(영수증)\n- 진료비세부내역서(비급여 내역이 없는 경우 생략가능)",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_05",
+              "title": "상해/질병 / 국내통원 / 3만원 이하",
+              "requirements": [
+                {
+                  "text": "진료비계산서(병원/약국 영수증) - 진료비세부내역서 ",
+                  "issuerText": "의료기관",
+                  "conditionText": "국내 통원 및 청구금액 3만원 이하",
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_06",
+              "title": "상해/질병 / 국내통원 / 3만원 초과 ~ 10만원 이하",
+              "requirements": [
+                {
+                  "text": "진료비계산서(병원/약국 영수증) - [질병분류코드가 기재된] 처방전(무료) * [질병분류코드가 기재된] 처방전이 없는 경우 우측 ※ 추가증빙서류가 요청될 수 있습니다. - 진료비세부내역서 ※ 추가증빙서류(3만원초과인경우 해당될수있음) - 진단서(소견서) - 통원(진료)확인서 - 진료차트 등 ",
+                  "issuerText": "의료기관",
+                  "conditionText": "국내 통원 및 청구금액 3만원 초과 ~ 10만원 이하",
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_07",
+              "title": "상해/질병 / 국내통원 / 10만원 초과",
+              "requirements": [
+                {
+                  "text": "진료비계산서(병원/약국 영수증) - [질병분류코드가 기재된] 처방전(무료) - 진료비세부내역서 - 필요시 우측 ※추가증서류 제출 요청",
+                  "issuerText": "의료기관",
+                  "conditionText": "국내 통원 및 청구금액 10만원 초과",
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_08",
+              "title": "상해/질병 / 국내통원 / 공통 유의사항",
+              "requirements": [
+                {
+                  "text": "※ 진료비세부내역서는 비급여 내역이 없는 경우 생략 가능합니다. ※ 진료비계산서(병원/약국 영수증)은 항목 구분이 가능한 표준영수증(의료법상 법정서식)으로 소득공제 확인용 '진료비납입확인서'나 '카드결제 영수증'은 해당하지 않습니다. ※ 병원에서 「환자보관용」처방전을 무료로 발급받으실 수 있습니다. ※ 보장제외 대상이 많은 진료과목(산부인과, 항문외과, 비뇨기과, 피부과 등) 및 짧은 기간 내 보험금 청구횟수가 과다한 경우 등 심사가 필요하다고 판단되는 때에는 별도의 추가 증빙서류 제출이 필요할 수 있음에 양해부탁드립니다.",
+                  "issuerText": "의료기관",
+                  "conditionText": "국내 통원 전체 금액 구간",
+                  "kind": "NOTICE"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_09",
+              "title": "휴대품손해 / 도난",
+              "requirements": [
+                {
+                  "text": "- 사고증명서(도난증명서, 현지 경찰서에서 발행한 서류)\n- 사고증명서 제출 불가한 경우 목격자확인서와 목격자의 출입국에 관한 사실증명 제출(목격자 확인서 작성 시 언제, 어디서, 누구와, 무엇을, 왜, 어떻게 되었는지 작성)\n- 도난물품 구입영수증\n- 여행 중 구입품인 경우 구입영수증(구입가격, 구입처, 구매일자 등이 적힌 영수증)",
+                  "issuerText": "현지경찰서 등",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_10",
+              "title": "휴대품손해 / 파손",
+              "requirements": [
+                {
+                  "text": "- 사고증명서(목격자 확인서 등)\n- 손상물 내역서(파손된 휴대품 사진)\n- 수리 가능한 경우: 손해명세서(손상물 수리견적서, 수리비 영수증)\n- 수리 불가능한 경우: 수리불가확인서, 신품가격 견적서(구입가격, 구입처, 구매일자 등이 적힌 구입영수증)",
+                  "issuerText": "수리업체",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_11",
+              "title": "휴대품손해 / 추가",
+              "requirements": [
+                {
+                  "text": "- (휴대폰 손해의 경우) 휴대폰 가입증명서(가입원부 증명서 및 이용계약 증명서)\n- (수하물 손해의 경우) 항공사 확인서",
+                  "issuerText": "통신사\n항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_12",
+              "title": "배상책임 / 대인",
+              "requirements": [
+                {
+                  "text": "- 피해자의 신체손해를 증명하는 서류\n· 피해자의 진단서, 진료차트\n· 병원치료비 영수증\n· 손해배상금 및 기타비용 지급 증빙서류",
+                  "issuerText": "현지의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_13",
+              "title": "배상책임 / 대물",
+              "requirements": [
+                {
+                  "text": "- 피해자의 재물손해를 증명하는 서류\nㆍ손상물 내역서(파손된 피해물 사진)\nㆍ수리가능한 경우: 손상물 수리견적서\nㆍ수리불가능한 경우: 수리불가확인서, 신품가격 견적서(물품의 구입가격, 구입처 등이 적힌 구입영수증)\n- 여행중 구입품인 경우 반드시 필수\nㆍ손해배상금 및 기타비용 지급 증빙서류",
+                  "issuerText": "현지업체",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_14",
+              "title": "특별비용",
+              "requirements": [
+                {
+                  "text": "- 사고증명서(사망진단서, 조난증명서, 입원확인서 등의 의료기간 발급서류)\n- 지출된 비용의 명세서 및 영수증\nㆍ구호자 항공료 티켓 및 영수증\nㆍ호텔 숙박비용 수납 영수증\nㆍ사설조난단체이용 지불영수증(조난시)",
+                  "issuerText": "현지경찰서\n현지의료기관\n항공사\n현지숙박업소\n현지단체",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_15",
+              "title": "여권분실 후 재발급\n(해외여행)",
+              "requirements": [
+                {
+                  "text": "- 여행증명서(T/C: Travel Certification)\n- 재발급 받은 여권사본(여권번호 확인)\n- 재발급 수수료 영수증 등",
+                  "issuerText": "재외공관\n시청/군청/구청",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_16",
+              "title": "항공기 및 수하물 지연\n(해외여행)",
+              "requirements": [
+                {
+                  "text": "- 항공사 확인서(서명, 일자 포함)\n- 항공사 탑승권 사본\n- 비용발생과 관련한 영수증\n- 결항: 결항에 따르는 불편에 대한 보상의 경우 결항된 항공편, 일자, 항공편의 시간과 추가적으로 발생한 숙박 및 식사비용에 관련된 세부자료",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "해외 입원/통원과 국내입원/국내통원의 금액별 기준을 혼합하지 않는다.",
+            "대체서류와 조건부 추가서류를 동시에 모두 필수로 안내하지 않는다.",
+            "비급여 내역이 없는 경우 진료비세부내역서 생략 가능. 질병분류코드 및 표준영수증 조건을 유지한다."
+          ],
+          "automaticSelectionAllowed": true,
+          "reviewedAt": "2026-11-21"
+        }
+      ]
+    },
+    {
+      "id": "meritz",
+      "name": "메리츠화재",
+      "aliases": [
+        "메리츠화재",
+        "메리츠화재해상보험"
+      ],
+      "profiles": [
+        {
+          "id": "overseas_travel",
+          "title": "해외여행자보험",
+          "guideUrl": "https://www.meritzfire.com/compensation/longterm-insurance/request-document.do#!/",
+          "verificationStatus": "BODY_REVIEWED",
+          "groups": [
+            {
+              "id": "overseas_travel_01",
+              "title": "공통서류",
+              "requirements": [
+                {
+                  "text": "• 보험금청구서(당사양식)\n• 개인(신용)정보처리동의서\n• 보험증권\n• 여권사본(본인확인, 입출국확인)\n• 본인수령시 통장사본",
+                  "issuerText": "—",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_02",
+              "title": "상해(질병) / 사망",
+              "requirements": [
+                {
+                  "text": "• 사망진단서(또는 사체검안서)\n• 피보험자의 호적등본\n• 위임장(필요시)",
+                  "issuerText": "현지구비",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_03",
+              "title": "상해(질병) / 치료비",
+              "requirements": [
+                {
+                  "text": "• 진단서\n• 진료비 세부내역서 및 영수증\n• 초진기록지",
+                  "issuerText": "현지구비",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_04",
+              "title": "배상책임 / 대인",
+              "requirements": [
+                {
+                  "text": "• 제3자의 진단서 및 치료비 영수증",
+                  "issuerText": "현지구비",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_05",
+              "title": "배상책임 / 대물",
+              "requirements": [
+                {
+                  "text": "• 손해증빙서류 및 손상물 수리 견적서",
+                  "issuerText": "현지구비",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_06",
+              "title": "휴대품 손해",
+              "requirements": [
+                {
+                  "text": "• 사고증명서(도난증명서, 현지경찰확인서 등)\n• 손해명세서(손상물 수리견적서, 파손된 휴대품의 사진 등)\n• 피해품의 구입가격, 구입처 등이 적힌 서류                                                   ※해외여행 중 도난사고는 금액과 관계없이 도난신고확인원 필요",
+                  "issuerText": "현지구비",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "overseas_travel_07",
+              "title": "특별비용",
+              "requirements": [
+                {
+                  "text": "• 사고증명서(사망진단서, 입원확인서 등)\n• 지출된 비용의 명세서 및 영수증",
+                  "issuerText": "현지구비",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "공식 페이지에서 연결된 PDF 6페이지의 해외여행자보험 표를 대조함.",
+            "호적등본은 공식 PDF 및 사용자 확인에 따른 현재 홈페이지 표기를 그대로 유지한다. 자료 전사 검증에서 별도 대체서류 확인을 요구하지 않는다.",
+            "금액과 관계없이 도난신고확인원 필요 문구는 같은 PDF 7페이지 도난사고 안내에 존재. 해외여행 표 자체의 별도 행은 아님."
+          ],
+          "verificationEvidence": {
+            "url": "https://cmdown.meritzfire.com/manager/cm/document/supply_file_info_outtravel.pdf",
+            "pages": [
+              6,
+              7
+            ],
+            "purpose": "내부 검증 출처. 사용자 응답에 양식 파일 링크로 포함하지 않는다."
+          },
+          "automaticSelectionAllowed": true,
+          "reviewedAt": "2026-11-21"
+        }
+      ]
+    },
+    {
+      "id": "hyundai",
+      "name": "현대해상",
+      "aliases": [
+        "현대해상",
+        "현대해상화재보험"
+      ],
+      "profiles": [
+        {
+          "id": "travel",
+          "title": "여행",
+          "guideUrl": "https://www.hi.co.kr/serviceAction.do?menuId=100636",
+          "verificationStatus": "BODY_REVIEWED_USER_CONFIRMED",
+          "groups": [
+            {
+              "id": "travel_01",
+              "title": "공통",
+              "requirements": [
+                {
+                  "text": "보험금청구서\n개인(신용)정보동의서, 수익자 계좌번호 포함",
+                  "issuerText": "현대해상",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "통장 사본",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "해외여행 시 여권 사본\n여권 사진 부분과 입출국 도장 찍힌 부분",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "입출국 도장이 없는 경우(자동출입국 대상 국가) 출입국확인서 추가 제출",
+                  "issuerText": "주민센터",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "국내여행 시 신분증 사본(앞면)",
+                  "issuerText": "개인",
+                  "conditionText": "국내여행. 홈페이지/모바일웹/모바일앱 청구 시 제출 불필요.",
+                  "kind": "DOCUMENT_GROUP",
+                  "origin": "OFFICIAL_PAGE_ADDITION"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_02",
+              "title": "공통 / 피보험자가 미성년자인 경우",
+              "requirements": [
+                {
+                  "text": "주민등록등본 또는 친권자임을 확인할 수 있는 서류",
+                  "issuerText": "주민센터",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_03",
+              "title": "의료비 / 해외",
+              "requirements": [
+                {
+                  "text": "진료확인서\n진단명이 확인되는 의료기관 발급서류\n진료비 영수증\n카드영수증 불가",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_04",
+              "title": "의료비 / 국내",
+              "requirements": [
+                {
+                  "text": "진단서\n진료비 영수증\n입원치료비 진료비 세부(산정)내역서\n비급여 미발생시 생략가능",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_05",
+              "title": "의료비 / 해외치료 후 국내에서 추가 치료 시",
+              "requirements": [
+                {
+                  "text": "초진차트",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_06",
+              "title": "사망",
+              "requirements": [
+                {
+                  "text": "사망진단서 또는 시체검안서 원본\n해당기관 원본대조필 날인 시 사본도 가능",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피보험자의 기본증명서, 가족관계증명서, 혼인관계증명서",
+                  "issuerText": "주민센터",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "법정상속인(각각)\n기본증명서, 가족관계증명서",
+                  "issuerText": "주민센터",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "법적상속인이 다수인 경우 대표자에게 위임 시\n각각의 위임장 및 인감증명서 필요",
+                  "issuerText": "현대해상",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_07",
+              "title": "배상책임",
+              "requirements": [
+                {
+                  "text": "보험금청구서(배상)\n개인(신용)정보수집·이용, 제공동의서 포함\n피해자 및 피보험자가 미성년자의 경우 부모님(법정대리인) 작성",
+                  "issuerText": "현대해상",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "계약자 및 피해자 신분증",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "미성년자의 경우 주민등록등본, 경우에 따라 가족관계증명서 및 기본증명서",
+                  "issuerText": "주민센터",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "합의서\n당사자간 합의 완료 시",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "합의금 지급 확인서",
+                  "issuerText": "구청",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_08",
+              "title": "배상책임 / 대인배상",
+              "requirements": [
+                {
+                  "text": "진단서 또는 진료확인서\n초진진료기록지\n치료비영수증",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_09",
+              "title": "배상책임 / 대물배상",
+              "requirements": [
+                {
+                  "text": "피해물품의 사진\n전체 및 파손부위/제품명",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "사고피해품의 구입시기/가격의 증빙서류",
+                  "issuerText": "구입처",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수리비견적서, 수리비영수증",
+                  "issuerText": "수리업자",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_10",
+              "title": "휴대품 손해/도난 / 파손",
+              "requirements": [
+                {
+                  "text": "사고경위서",
+                  "issuerText": "현대해상",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "파손사실확인서",
+                  "issuerText": "현대해상",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해품 내역서",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수리 가능 시: 수리견적서, 수리비 영수증",
+                  "issuerText": "수리업자",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수리 불가 시: 수리불가 확인서, 파손사진, 잔존물 회수",
+                  "issuerText": "수리업자",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "휴대전화 파손 시: 가입 증명서(해지 유무확인 필), 휴대전화 보험 확인 서류",
+                  "issuerText": "휴대전화대리점",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "필요시 목격자 확인서 및 목격자 신분증 사본",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_11",
+              "title": "휴대품 손해/도난 / 도난",
+              "requirements": [
+                {
+                  "text": "사고증명서(현지 경찰 확인서, 도난증명서, 문답서 등)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "사고증명서가 없는 경우\n여행사 사고확인서(개인정보동의서, 가이드 재직증명서) 또는 목격자 사고확인서(개인정보동의서, 목격자 신분증 사본)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "사고경위서, 도난사실확인서",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해품 내역서 및 영수증",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수하물 손해의 경우\n항공사 확인서",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_12",
+              "title": "식중독(해외)",
+              "requirements": [
+                {
+                  "text": "진단서(확정 진단 기재 서류)\n약관 내 식중독분류표 해당 진단명 표기 필요",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_13",
+              "title": "전염병(해외)",
+              "requirements": [
+                {
+                  "text": "진단서(확정 진단 기재 서류)",
+                  "issuerText": "의료기관",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "보건소 신고 서류",
+                  "issuerText": "관공서",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_14",
+              "title": "항공기 및 수하물 지연비용(해외) / 항공기 지연/결항",
+              "requirements": [
+                {
+                  "text": "사고경위서",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공기 지연/결항 확인서",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "지연/결항으로 발생한 비용 영수증\n(식비, 숙박비, 숙박시설 교통비 등으로 상호, 날짜, 시간 명시)",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "지연/결항 전후 항공 티켓 (e-Ticket)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_15",
+              "title": "항공기 및 수하물 지연비용(해외) / 수하물지연",
+              "requirements": [
+                {
+                  "text": "사고경위서",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "지연시간 표기된 수하물지연확인서 또는\n항공사에 지연신고한 서류 (Property irregularity Report)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "지연으로 발생한 필수품 구매영수증(상호, 날짜, 시간 명시)",
+                  "issuerText": "개인",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공 티켓 (e-Ticket)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_16",
+              "title": "분실여권 재발급",
+              "requirements": [
+                {
+                  "text": "여행증명서 (T/C: Travel Certification)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "재발급한 여권 사본 (여권번호 표기 면)",
+                  "issuerText": "시청/군청/구청",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "재발급비용 증빙서류 (영수증 등)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "홈페이지/모바일웹/앱 청구 시 보험금청구서와 신분증 사본 제출 불필요.",
+            "여행증명서 발급처 항공사 및 합의금 지급 확인서 발급처 구청은 공식 페이지와 일치하고 사용자 확인 완료. 원문 유지."
+          ],
+          "automaticSelectionAllowed": true,
+          "reviewedAt": "2026-11-21"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "name": "DB손해보험",
+      "aliases": [
+        "DB손해보험",
+        "DB손보",
+        "디비손해보험",
+        "동부화재"
+      ],
+      "profiles": [
+        {
+          "id": "travel",
+          "title": "여행자보험 및 휴대품손해",
+          "guideUrl": "https://www.idbins.com/pc/bizxpress/ct/dc/FWCUSV1302.shtm",
+          "verificationStatus": "BODY_REVIEWED_USER_CONFIRMED",
+          "groups": [
+            {
+              "id": "travel_01",
+              "title": "공통",
+              "requirements": [
+                {
+                  "text": "• 보험금청구서\n• 개인정보동의서 : 피보험자 및 목격자 등 관련자 필수\n• 미성년자의 경우 : 부모님 개인정보동의서",
+                  "issuerText": "보험회사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "• 통장 사본\n• 미성년자의 경우 : 부모님 통장사본, 주민등록등본 또는 가족\n• 여권 사본(사진 부분과 입출국 도장 찍힌 부분)\n• 국내 여행자보험인 경우 신분증 사본",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_02",
+              "title": "도난/파손",
+              "requirements": [
+                {
+                  "text": "• 사고경위서\n• 도난, 파손 사실 확인서",
+                  "issuerText": "보험회사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "• 도난신고 사실확인서\n• 현지 인근 경찰서에 신고 : 도난신고 확인서 발급\n• 공항 수하물 사고 시 : 공항안내소 신고확인서(항공사 보상 관련 확인서류 첨부)\n• 호텔 도난시 : 프론트에 신고 후 확인증 첨부\n• 경찰서 등 신고할 수 없는 상황인 경우 : 가이드 확인서, 대사관 신고 후 발급",
+                  "issuerText": "경찰서\n항공사\n호텔",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "• 피해품 영수증(피해 입증자료) : 구매 영수증(발급 시)\n• 구입시점부터 사고시점까지 법정 감가율이 적용됩니다.\n• 미제출시 25% 감가 (산정내역에 따라 변동될 수 있습니다.)",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "[파손 시]\n• 목격자 확인서\n• 수리 가능 시 : 기술소견서, 수리견적서, 영수증\n• 수리 불가능 시 : 수리불가 확인서, 파손사진, 잔존물 회수",
+                  "issuerText": "-",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "[휴대폰 도난 파손 시]\n• 가입 증명서(해지 유무 확인필)\n• 휴대폰 보험 확인 서류",
+                  "issuerText": "휴대폰 대리점",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_03",
+              "title": "입원 / 실손의료비",
+              "requirements": [
+                {
+                  "text": "• 진단서\n(단, 청구금액 50만원 이하 시 진단명이 포함된 입퇴원 확인서 또는 진단명 및 입원기간이 포함된 진료확인서로 대체 가능)\n• 진료비계산서(영수증)\n• 진료비세부(상세)내역서",
+                  "issuerText": "병원",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_04",
+              "title": "통원 / 외래의료비",
+              "requirements": [
+                {
+                  "text": "• 진단명/통원일자·기간이 포함된 서류\n(예: 진단서, 통원확인서, 처방전, 진료확인서, 소견서, 진료차트 등)\n단, 3만원 이하 시(산부인과, 항문외과, 비뇨기과, 피부과 등 제외) 제출 생략 가능\n• 진료비계산서(영수증)",
+                  "issuerText": "병원",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "travel_05",
+              "title": "통원 / 약제의료비",
+              "requirements": [
+                {
+                  "text": "• 처방전\n• 약제비계산서(영수증)",
+                  "issuerText": "약국",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "미성년자 추가서류의 주민등록등본 또는 가족은 공식 페이지와 사용자 확인에 따른 원문 그대로 유지한다. 가족관계증명서 등으로 임의 확장하지 않는다.",
+            "잔존물 회수는 서류가 아닌 제출/처리 조치로 응답 시 분리한다.",
+            "감가율·25% 감가 문구는 서류 수집 참고정보이며 보상금 판단 근거로 사용하지 않는다."
+          ],
+          "automaticSelectionAllowed": true,
+          "reviewedAt": "2026-11-21"
+        }
+      ]
+    },
+    {
+      "id": "hanwha",
+      "name": "한화손해보험",
+      "aliases": [
+        "한화손해보험",
+        "한화손보"
+      ],
+      "profiles": [
+        {
+          "id": "hanwha_travel",
+          "title": "한화손보 여행자보험",
+          "guideUrl": "https://www.hwgeneralins.com/fplaza/compensation/receipt05.do",
+          "verificationStatus": "FETCH_TIMEOUT",
+          "groups": [
+            {
+              "id": "hanwha_travel_01",
+              "title": "공통서류 / 필요서류",
+              "requirements": [
+                {
+                  "text": "• ①보험금 청구서\n• ②보험금 청구를 위한 필수 동의서 (반드시 작성)\n• ③사고경위서\n• ④신분증사본(해외여행 시 여권 사진면 및 출입국 도장 사증면) 또는 출입국 증명서 또는 항공권\n• ⑤통장사본 보험금 청구서 기재 시 생략 가능",
+                  "issuerText": "• 당사 홈페이지\n필요서류 안내 필요서류다운로드\n• 본인 또는 가이드\n• 고객상담센터\n• 관공서",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_02",
+              "title": "공통서류 / 수익자가미성년자인 경우",
+              "requirements": [
+                {
+                  "text": "• ①가족관계증명서 등 가족관계 확인서류\n• ②친권자의 통장 사본(사전 미등록 계좌), 신분증 사본\n이혼 등 기타 사유로 친권자가 1명으로 지정된 경우 : 미성년자 기준의 기본증명서(친권확인서류)",
+                  "issuerText": null,
+                  "conditionText": "수익자가미성년자인 경우",
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_03",
+              "title": "공통서류 / 대리인청구 및 청구보험금 위임하는 경우",
+              "requirements": [
+                {
+                  "text": "• ①위임장(원 수익자 인감 날인 또는 본인 자필 서명 필수)\n• ②원 수익자 본인으로 발급한 인감증명서(인감 날인 시) 또는 본인 서명 사실 확인서(자필 서명 시)\n• ③위임 받은 자의 통장사본, 신분증 사본, 개인(신용)정보처리동의서",
+                  "issuerText": null,
+                  "conditionText": "대리인청구 및 청구보험금 위임하는 경우",
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_04",
+              "title": "의료비 / 통원",
+              "requirements": [
+                {
+                  "text": "• ①의무기록지(진단서, 초진기록지, medical note, hospital note 등)\n◦ 20만원 미만 시 의무기록 사본으로 대체 가능\n◦ 진료비 20만원 이상 진단서 필요 / 상해 사고 초진 기록지 필요\n• ②통원 의료비 영수증, 약국 영수증(카드 전표 처리 불가)\n• ③진료비 세부 내역서",
+                  "issuerText": "• 병원\n• 약국",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_05",
+              "title": "의료비 / 입원",
+              "requirements": [
+                {
+                  "text": "• ①의무기록지(진단서, 초진기록지, medical note, hospital note 등)\n• ②입원비 영수증\n• ③진료비세부내역서(국내 치료 시)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_06",
+              "title": "휴대품 / 파손",
+              "requirements": [
+                {
+                  "text": "• ①수리비 견적서 및 영수증\n• ②수리 불가 또는 견적 비용이 과다한 경우 예상 견적서 또는 수리불가 확인서\n\n파손된 물품은 본사로 송부되어야 보상 가능\n• ③파손품 피해 사진\n• ④피해품 내역서\n• ⑤피해품 최초 구입 영수증\n\n피해품이 휴대폰 일 경우 통신사 가입 확인 서류(통신사 별 서류 명 상이)\n- SKT(1566-0011) : 이용계약등록사항 증명서\n- KT(1588-0010) : 가입원부 증명서\n- LG U+(1544-0010) : 해지확인서 혹은 가입확인서\n• ⑥목격자 확인서 및 사고경위서수하물 사고는 항공사 처리 결과 확인서 첨부",
+                  "issuerText": "• 수리업체\n• 통신사\n• 휴대폰대리점\n• 항공사\n• 당사양식 필요서류다운로드",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_07",
+              "title": "휴대품 / 도난",
+              "requirements": [
+                {
+                  "text": "• ①도난 확인서(Police Report) - 현지 경찰서 발급 가능현지 경찰서 미신고 시 가이드 확인서 대체 가능\n• ②가이드 경위서(도난 확인서가 없을 경우, 단 해당 서류로 지급이 확정되는 것은 아님)\n• ③목격자 확인서 및 사고경위서(도난 확인서, 가이드 경위서 없을 경우) + 목격자 신분증수하물 사고는 항공사 처리 결과 확인서 첨부\n• ④피해품 최초 구입 영수증(없을 경우 기타 소지증빙서류 : 사진 등)\n• ⑤도난 물품 내역서(구입일자, 물품 상품명 기재 - 피보험자 수기 작성)피해품이 휴대폰 일 경우 통신사 가입 확인 서류(통신사 별 서류 명 상이)\n- SKT(1566-0011) : 이용계약등록사항 증명서\n- KT(1588-0010) : 가입원부 증명서\n- LG U+(1544-0010) : 해지확인서 혹은 가입확인서",
+                  "issuerText": "• 현지경찰서\n• 통신사\n• 휴대폰대리점",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_08",
+              "title": "여행 중 불편보상 / 기본",
+              "requirements": [
+                {
+                  "text": "• ①항공사 4시간 이상 지연, 결항, 취소, 탑승거부 및 수하물 지연, 손실(처리) 확인서(지연, 결항 또는 손실 시간 및 대상인 기재 필요)\n• ②피보험자의 항공사 탑승권 사본(지연, 결항 전)",
+                  "issuerText": "항공사",
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "구비서류 필수 기재 사항\n• ①결항, 지연, 탑승 거부 시 기재사항\n◦ 지연, 결항 시간\n◦ 피보험자 성명\n◦ 결항, 지연된 항공편, 일자, 시간\n• ②수하물 손실 및 지연의 경우 기재사항\n◦ 지연, 손실 발생 일자\n◦ 피보험자 성명\n◦ 출발, 도착 지점 및 시간\n◦ 항공사 명칭, 항공편 번호\n◦ 수하물 손실 발생과 관련된 상황 정보",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_09",
+              "title": "여행 중 불편보상 / 항공편 지연, 결항, 취소",
+              "requirements": [
+                {
+                  "text": "4시간 이상 항공편 지연, 결항, 취소 또는 과적에 의한 탑승 거부 시식사, 간식, 통화료, 숙박비 및 숙소로 가는 교통비 구입(결제) 영수증 필수 첨부",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_10",
+              "title": "여행 중 불편보상 / 수하물 지연\n(6시간 이내 미 도착)",
+              "requirements": [
+                {
+                  "text": "항공편의 예정된 도착시간으로부터 6시간 이내 수하물이 도착하지 못한 경우비상 의복, 필수품 구입(결제) 영수증 필수 첨부",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "hanwha_travel_11",
+              "title": "여행 중 불편보상 / 수화물 손실\n(24시간 이내 미 도착)",
+              "requirements": [
+                {
+                  "text": "항공편의 예정된 도착시간으로부터 24시간 이내 수하물이 도착하지 못한 경우피보험자에 대한 비상 의복, 필수품 구입(결제) 영수증(도착 후 120시간 내 발생한 비용)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "홈페이지 시간·금액 기준은 일반 안내 원문 보존용이며 가입 상품의 보상 요건으로 단정하지 않는다.",
+            "가이드 확인서·목격자 서류는 도난확인서의 부재 조건에 따른 대체 경로다. 모두 필수로 나열하지 않는다.",
+            "한화 공식 페이지 응답 시간 초과로 첨부 자료와 Notion만 확인했다."
+          ],
+          "automaticSelectionAllowed": false,
+          "reviewedAt": "2026-11-21"
+        }
+      ],
+      "dbInsurerName": "한화손해보험",
+      "identityVerification": {
+        "verifiedAt": "2026-11-21",
+        "source": "EC2 운영 DB policy_terms.insurer_name 읽기 전용 조회",
+        "table": "policy_terms",
+        "column": "insurer_name"
+      }
+    },
+    {
+      "id": "carrot",
+      "name": "캐롯손해보험",
+      "aliases": [
+        "캐롯손해보험",
+        "캐롯"
+      ],
+      "profiles": [
+        {
+          "id": "carrot_channel",
+          "title": "캐롯 해외여행보험 여행중사고",
+          "guideUrl": "https://www.carrotins.com/desktop/reward/claim/guide/?afcDtcd=direct_pc_gnb&afccd=PA01096&main=y&page=GuideDocCheck",
+          "verificationStatus": "SITE_INSPECTION_BLOCKED",
+          "groups": [
+            {
+              "id": "carrot_channel_01",
+              "title": "휴대품손해",
+              "requirements": [
+                {
+                  "text": "여권사본 및 출입국기록 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해품 (파손)사진",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해품 정보를 증빙할 수 있는 서류\n- 구입영수증\n- 피해품 정보(종류/모델명/모델번호 등) 및 소유관계, 구입시기, 금액 등을 확인할 수 있는 자료",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "도난의 경우 경찰확인서 (해외 Police Report : 인적사항, 사고경위, 도난물품 등 기재)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_02",
+              "title": "항공기 및 수하물 지연비용",
+              "requirements": [
+                {
+                  "text": "여권사본 및 출입국기록 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공사로부터 발급받은 재산손실보고서로서 서명, 일자가 포함된 것",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피보험자의 항공사 탑승권 사본",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "결항 및 지연 후 대체 항공편 사본",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공사 확인서(결항/지연확인서)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "식사, 간식, 전화 통화비, 숙박비, 숙박 시설에 대한 교통비 관련 영수증 등 비용 발생과 관련한 자료",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_03",
+              "title": "출국 항공기 지연·결항 보상(지수형)",
+              "requirements": [
+                {
+                  "text": "항공기 탑승권 사본\n- 항공티켓 실물 사진, E - 티켓 캡처 등",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공기 지연(결항) 확인서\n- 탑승한 항공사 카운터 방문\n- 항공사 홈페이지를 통해 발급\n- 공항 내 무인발급기 이용\n- 항공사 고객센터 전화 요청",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "가족관계증명서류(피보험자가 미성년자녀인 경우)\n- 가족관계증명서, 주민등록등본 등",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_04",
+              "title": "여권도난분실 재발급비용/추가체류비용",
+              "requirements": [
+                {
+                  "text": "공통\n- 출입국기록 증빙서류\n- 긴급여권(귀국 후 여권 재신청 등의 사유로 긴급여권의 원본제출이 불가능한 경우, 해당 지방자치단체가 원본과 동일함을 증명한 사본 제출)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "재발급비용 : 재발급 받은 여권 사본 및 신분증 사본, 긴급여권 발급비용 및 여권 재발급비용 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "추가체류비용 : 추가로 지출한 숙박비와 식대 증빙서류(기지불한 숙박비와 식대를 제외), 기지불한 최고액의 숙박비 영수증, 항공권 등 귀국수단의 탑승권(여권 도난, 분실 전의 기지불 항공권과 추가체류가 발생하여 변경된 항공권 포함)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_05",
+              "title": "중대사고 구조송환비용",
+              "requirements": [
+                {
+                  "text": "여권사본 및 출입국기록 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "수색구조/숙박/이송비용 지불내역",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "항공운임 등 교통비 지불내역",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "그 외 출입국 절차에 필요한 비용내역",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_06",
+              "title": "중단사고발생 추가비용",
+              "requirements": [
+                {
+                  "text": "여권사본 및 출입국기록 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "추가로 발생한 항공 또는 선박 운임비용 지불내역",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "추가로 발생한 2박 이내의 숙박비용",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_07",
+              "title": "항공기납치",
+              "requirements": [
+                {
+                  "text": "여권사본 및 출입국기록 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_08",
+              "title": "배상책임",
+              "requirements": [
+                {
+                  "text": "공통\n- 여권사본 및 출입국기록 증빙서류\n- 피보험자 주민등록등본(뒷자리 포함하여 발급, 중복보험 조회용)\n- 보험금 수령인의 신분증 및 통장사본(미성년자의 경우 법정대리인의 가족관계확인서류 및 신분증, 통장사본), 개인(신용)정보처리동의서\n- 당사자간 합의 완료시 합의서, 합의금 지급내역",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "대인 : 진단서, 초진기록지, 진료비계산서(영수증) 등",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "대물 : 파손사진, 피해물등록증(차량등록증, 등기부등본 등), 수리비견적서, 수리비영수증, 수리불가확인서(수리 불가 시) 등",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            },
+            {
+              "id": "carrot_channel_09",
+              "title": "폭력상해피해 변호사선임비용",
+              "requirements": [
+                {
+                  "text": "여권사본 및 출입국기록 증빙서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "상해를 확인할 수 있는 증명서(진단서, 사망진단서, 장해진단서, 입원치료확인서 등)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "피해자임을 입증할 수 있는 서류(해당 국가 경찰기관의 Police Report 등)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "사건의 내용 및 재판을 확인할 수 있는 문서(소장, 판결문 등)",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                },
+                {
+                  "text": "선임한 변호사가 발행한 세금계산서 등 변호사선임비용을 확인할 수 있는 서류",
+                  "issuerText": null,
+                  "conditionText": null,
+                  "kind": "DOCUMENT_GROUP"
+                }
+              ],
+              "requiresConditionEvaluation": true
+            }
+          ],
+          "notes": [
+            "사용자가 제공한 이미지 4장 및 Notion 전사를 근거로 보관. 공식 페이지는 개발자 도구 실행 차단 안내로 본문 검증 불가.",
+            "사용자 확인: 항공기 및 수하물 지연비용은 원문에서 개별 적용이 명시되지 않아 원문 목록 그대로 일반 안내한다. 임의로 사고별 서류를 분리하지 않는다.",
+            "2박 이내 숙박비용은 원문에 서류명이 아닌 비용으로 표기되어 있어 임의로 영수증 문구를 추가하지 않았다."
+          ],
+          "userContentConfirmation": "사용자 확인 완료. 지연비용 목록은 원문 순서대로 일반 안내하고 실제 제출서류는 보험사 확인 안내를 함께 제공한다.",
+          "selectionConstraint": "연결 약관의 보험사명 캐롯손해보험에 매칭한다. 한화손해보험 자료와 합산 금지. 증권 인수사 표기가 한화일 때 이름만으로 캐롯에 매칭하지 않는다.",
+          "automaticSelectionAllowed": false,
+          "reviewedAt": "2026-11-21"
+        }
+      ],
+      "dbInsurerName": "캐롯손해보험",
+      "identityVerification": {
+        "verifiedAt": "2026-11-21",
+        "source": "EC2 운영 DB policy_terms.insurer_name 읽기 전용 조회",
+        "table": "policy_terms",
+        "column": "insurer_name"
+      }
+    }
+  ]
+}
