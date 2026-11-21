@@ -13,6 +13,7 @@ from app.services.claim_document_selector import build_claim_document_response
 from app.services.claim_incident_classifier import (
     is_claim_document_turn, classify_claim_incident, claim_clarification,
 )
+from app.services.uninsured_chat import answer_uninsured
 from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
 from app.services.embedding_service import embed_query
@@ -262,6 +263,28 @@ def answer_question(
     history: list[dict] | None = None,
 ) -> RagQueryResponse:
     settings = get_settings()
+
+    # 명시적인 미완료 상태가 온 요청은 정적 응답 경로로 처리한다. 이 분기는
+    # 청구서류 분류·질문 재작성·임베딩·RAG 답변 생성보다 먼저 실행되어야 한다.
+    # certificateStatus가 없는 기존 요청은 이 경로를 타지 않는다.
+    if request.certificate_status in {"UNREGISTERED", "ANALYZING", "FAILED"}:
+        result = answer_uninsured(
+            request.question,
+            request.certificate_status,
+            history=request.history,
+        )
+        logger.info(
+            "무증권 정적 응답: status=%s, intent=%s, contacts=%s",
+            request.certificate_status,
+            result.intent,
+            ",".join(result.suggested_contacts) or "none",
+        )
+        return RagQueryResponse(
+            answer=result.answer,
+            suggested_contacts=list(result.suggested_contacts),
+            sources=[],
+            claim_documents=[],
+        )
 
     turns = history if history is not None else [
         {"role": "user" if t.sender == "USER" else "assistant", "content": t.content}
