@@ -7,13 +7,8 @@ from scripts.embed_chunks import BATCH_SIZE, build_embed_text
 
 # 벤더는 settings.embedding_provider로 고른다.
 #
-# 비교 실험(db_travel, 12문항) 결과 upstage-1536을 채택했다.
-#   openai-small       MRR 0.5147
-#   openai-large-1536  MRR 0.5744
-#   upstage-1536       MRR 0.7875
-# Upstage 기본 출력은 4096차원인데 pgvector 인덱스 한계(vector 2000/halfvec 4000)를
-# 넘어서므로 dimensions=1536으로 줄였다. 품질은 4096과 동일했고,
-# 백엔드 policy_chunks.embedding vector(1536)을 그대로 쓸 수 있다.
+# 운영은 Solar Embedding 2를 사용한다. API 원본은 1024차원이며,
+# 저장된 문서 벡터와 DB vector(1536) 규격에 맞게 0을 패딩한다.
 def _provider():
     return get_provider(get_settings().embedding_provider)
 

@@ -18,6 +18,7 @@ from app.services.answer_providers import generate
 from app.services.bm25 import reciprocal_rank_fusion
 from app.services.embedding_service import embed_query
 from app.services.prompt_builder import SYSTEM_PROMPT, build_user_message
+from app.services.pii_redaction import redact_pii
 from app.services.query_rewriter import rewrite
 from app.services.reranker import mmr_select
 from scripts.chunk_policy import is_toc_text
@@ -234,6 +235,8 @@ def build_sources(
 # client 인자는 테스트가 OpenAI 호출을 가로채는 용도로 남아 있다.
 # 넘어오면 기존 경로를 그대로 쓰고, 없으면 레지스트리로 간다.
 def _call_llm(user_message: str, client: OpenAI | None = None, model: str | None = None) -> str:
+    # Keep the direct OpenAI compatibility path behind the same outbound filter.
+    user_message = redact_pii(user_message)
     if client is None:
         answer, _ = generate(SYSTEM_PROMPT, user_message)
         return answer

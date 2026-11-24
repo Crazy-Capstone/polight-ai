@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
 
     # 임베딩 벤더. app/services/embedding_providers.py의 PROVIDERS 키.
-    # 비교 실험 결과 upstage-1536 채택 (MRR 0.7875 vs openai-small 0.5147).
-    embedding_provider: str = "upstage-1536"
+    # 운영은 Solar Embedding 2를 사용한다.
+    embedding_provider: str = "upstage-embed2"
 
     # 답변 생성 벤더. app/services/answer_providers.py의 PROVIDERS 키.
     #

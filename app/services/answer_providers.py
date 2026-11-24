@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass
 
 from app.core.config import get_settings
+from app.services.pii_redaction import redact_pii
 
 
 @dataclass(frozen=True)
@@ -248,6 +249,8 @@ def generate_json(
 
     파싱 실패 자체가 모델 비교 항목이라 여기서 예외로 바꾸지 않는다.
     """
+    # Apply the same outbound filter regardless of the configured vendor.
+    user = redact_pii(user)
     provider = resolve(provider_name)
     started = time.time()
     raw = _JSON_DISPATCH[provider.vendor](provider, system, user)
@@ -264,6 +267,8 @@ def generate(
     시간을 같이 재는 이유는 비교 실험에서 품질만큼 응답 속도가 중요하기 때문이다.
     챗봇은 사용자가 기다리는 화면이라 정확도가 조금 높아도 너무 느리면 못 쓴다.
     """
+    # Apply the same outbound filter regardless of the configured vendor.
+    user = redact_pii(user)
     provider = resolve(provider_name)
     started = time.time()
     answer = _DISPATCH[provider.vendor](provider, system, user)

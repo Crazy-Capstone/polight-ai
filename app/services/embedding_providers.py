@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 from app.core.config import get_settings
+from app.services.pii_redaction import redact_pii
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,10 @@ class EmbeddingProvider:
     # OpenAI v3 계열은 dimensions로 출력 차원을 줄일 수 있다.
     # 백엔드 DDL이 vector(1536)이라, 3-large를 1536으로 맞추면 스키마 변경 없이 쓸 수 있다.
     dimensions: int | None = None
+    # API 원본 벡터의 기대 차원. Upstage Solar Embedding 2는 1024차원 고정이다.
+    expected_dimensions: int | None = None
+    # DB vector(1536) 규격을 유지하기 위해 보관할 차원. 0-padding은 거리를 보존한다.
+    storage_dimensions: int | None = None
 
 
 PROVIDERS: dict[str, EmbeddingProvider] = {
@@ -71,6 +76,17 @@ PROVIDERS: dict[str, EmbeddingProvider] = {
         query_model="embedding-query",
         dimensions=2000,
     ),
+    # Solar Embedding 2는 1024차원을 반환한다. 기존 vector(1536) 스키마와
+    # 재임베딩된 문서 벡터에 맞추기 위해 아래 embed()에서 512개의 0을 덧붙인다.
+    "upstage-embed2": EmbeddingProvider(
+        name="upstage-embed2",
+        base_url="https://api.upstage.ai/v1",
+        api_key_field="upstage_api_key",
+        doc_model="solar-embedding-2-passage",
+        query_model="solar-embedding-2-query",
+        expected_dimensions=1024,
+        storage_dimensions=1536,
+    ),
     "qwen": EmbeddingProvider(
         name="qwen",
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
@@ -107,9 +123,32 @@ def embed(
     client = client or build_client(provider)
     model = provider.query_model if is_query else provider.doc_model
 
-    kwargs: dict = {"input": texts, "model": model}
+    # Embeddings are external AI requests too; sanitize before transmission.
+    safe_texts = [redact_pii(text) for text in texts]
+    kwargs: dict = {"input": safe_texts, "model": model}
     if provider.dimensions:
         kwargs["dimensions"] = provider.dimensions
 
     response = client.embeddings.create(**kwargs)
-    return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+    vectors = [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+
+    if provider.expected_dimensions is not None:
+        for vector in vectors:
+            if len(vector) != provider.expected_dimensions:
+                raise ValueError(
+                    f"{provider.name} expected {provider.expected_dimensions} dimensions, "
+                    f"received {len(vector)}"
+                )
+
+    if provider.storage_dimensions is not None:
+        if any(len(vector) > provider.storage_dimensions for vector in vectors):
+            raise ValueError(
+                f"{provider.name} vector exceeds storage dimension "
+                f"{provider.storage_dimensions}"
+            )
+        vectors = [
+            vector + [0.0] * (provider.storage_dimensions - len(vector))
+            for vector in vectors
+        ]
+
+    return vectors
