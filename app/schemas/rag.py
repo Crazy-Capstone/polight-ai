@@ -106,7 +106,9 @@ class CertificateCoverage(CamelModel):
 # POST /internal/rag/query 요청 바디
 class RagQueryRequest(CamelModel):
     user_id: str
-    trip_id: str
+    # 미등록/분석 중/실패 요청은 여행 연결이 아직 없어 null일 수 있다.
+    # 키는 기존 요청 계약대로 받되, null 값은 허용한다.
+    trip_id: str | None
     question: str
 
     # 백엔드가 증권 상태를 명시적으로 전달한다. terms_id가 없는 이유만으로는
